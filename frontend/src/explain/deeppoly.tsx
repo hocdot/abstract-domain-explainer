@@ -338,7 +338,6 @@ function ReluBody({ step, trace, sub, onSub }: StepProps) {
   const j = step.neuron!
   const stage = trace.stages[step.stage]
   const pre = trace.stages[step.stage - 1]
-  const out = stage.bounds[j]
   const h = texSym(stage, j)
   const z = texSym(pre, j)
   const l = d.pre.lower

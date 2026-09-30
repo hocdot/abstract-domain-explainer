@@ -1,34 +1,74 @@
 import { fmt, texLin, texSym } from '../format'
-import { BoxPlot, IntervalBar, niceRange } from '../components/plots'
+import { IntervalBar, SamplePlot, niceRange } from '../components/plots'
 import { Tex } from '../components/Tex'
 import type { Bounds } from '../types'
 import { DOMAIN_NAMES, type StepProps, type StepView } from './registry'
 
-function InputBody({ trace }: StepProps) {
+function InputBody({ step, trace }: StepProps) {
   const x = trace.stages[0]
-  const lower = x.bounds.map((b) => b.lower)
-  const upper = x.bounds.map((b) => b.upper)
+  const y = trace.stages[trace.stages.length - 1]
+  const samples = (step.detail as { samples?: { inputs: number[][]; outputs: number[][] } }).samples
+  const domain = DOMAIN_NAMES[trace.domain] ?? trace.domain
+  const ranges = (s: typeof x) => s.bounds.map((b, i) => (
+    <li key={i}><Tex>{`${texSym(s, i)} \\in [${fmt(b.lower)},\\ ${fmt(b.upper)}]`}</Tex></li>
+  ))
   return (
     <>
       <p>
-        A verifier doesn't test one input. It reasons about <em>every</em> input in a region at once. Here the region is
-        a <strong>box</strong>: each input gets its own interval and can take any value inside it.
+        The input to the network is not a single point but a box in which each input may take any value within its own
+        interval. We want to know what the network can output for any input in that box.
       </p>
-      <div className="split">
-        <ul className="bound-list">
-          {x.bounds.map((b, i) => (
-            <li key={i}>
-              <Tex>{`${texSym(x, i)} \\in [${fmt(b.lower)},\\ ${fmt(b.upper)}]`}</Tex>
-            </li>
-          ))}
-        </ul>
-        {x.size === 2 && <BoxPlot lower={lower} upper={upper} />}
-      </div>
+      {samples ? (
+        <>
+          {/* the idea in one picture: inputs from the box, pushed through the network */}
+          <div className="io-figure">
+            <figure>
+              <figcaption>Input box</figcaption>
+              <SamplePlot box={x.bounds} points={samples.inputs} name="x" />
+              <ul className="bound-list">{ranges(x)}</ul>
+            </figure>
+            <div className="io-arrow" aria-hidden="true">
+              <span>network</span>
+              <svg viewBox="0 0 44 14"><path d="M2,7 H38" /><path d="M33,2.5 L40,7 L33,11.5" /></svg>
+            </div>
+            <figure>
+              <figcaption>Outputs</figcaption>
+              <SamplePlot box={y.bounds} points={samples.outputs} name="y" proven />
+              <ul className="bound-list">{ranges(y)}</ul>
+            </figure>
+          </div>
+        </>
+      ) : (
+        <ul className="bound-list">{ranges(x)}</ul>
+      )}
+      <h3>Abstract domains</h3>
       <p>
-        Our goal is an interval for every neuron that is <strong>guaranteed</strong> to contain all the values it can take
-        on this box. {DOMAIN_NAMES[trace.domain] ?? trace.domain} computes them left to right, one neuron at a time.
+        Computing the exact set of outputs the network can produce on the box is intractable in general, so an abstract
+        domain replaces it with a simpler description.
+        Here we use one interval per output, that is guaranteed to contain
+        every possible output. A description with this guarantee is called <strong>sound</strong>, which means it may be
+        larger than necessary but never misses an output. Testing sample inputs cannot give this guarantee because the
+        most extreme output may come from an input that was never tried.
       </p>
-      <p className="hint">Press <kbd>→</kbd> or <em>Next</em> to start.</p>
+      <p>
+        The domain starts from the input box and pushes its description through each operation of the network in turn,
+        using a rule for every operation that keeps the description sound. Domains trade precision for cost, since a
+        domain that remembers how neurons depend on one another gives tighter bounds but does more work.
+      </p>
+      <p>
+        {trace.domain === 'ibp' ? (
+          <>{domain} describes every neuron by an interval alone and computes the intervals of each layer from those of
+          the previous layer, ignoring how those neurons relate to one another.</>
+        ) : trace.domain === 'deeppoly' ? (
+          <>{domain} describes every neuron by a linear lower bound and a linear upper bound in terms of the neurons
+          before it. Following these bounds back to the inputs keeps track of how neurons depend on the same inputs and
+          makes the intervals tighter.</>
+        ) : (
+          <>This page uses {domain}.</>
+        )}{' '}
+        The steps that follow apply the domain one neuron at a time from the first layer to the output.
+      </p>
+      <p className="hint small muted">Use <kbd>→</kbd> or <em>Next</em> to proceed.</p>
     </>
   )
 }

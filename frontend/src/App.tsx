@@ -161,10 +161,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <span className="logo" aria-hidden="true">[ ]</span>
-          <div>
-            <h1>BoundLab</h1>
-            <p className="tagline">How neural network verifiers bound every neuron, step by step</p>
-          </div>
+          <h1>Abstract Domain Explainer</h1>
         </div>
         <div className="row gap-sm">
           <button className="btn ghost small" onClick={() => setControlsOpen(!controlsOpen)} aria-pressed={!controlsOpen}>

@@ -8,6 +8,7 @@ from ..netspec import DTYPE, InputBox, Network
 from ..schema import Bounds, DomainInfo, Stage, Trace
 
 N_SAMPLES = 4000
+N_SHOWN = 100
 
 REGISTRY: dict[str, 'Domain'] = {}
 
@@ -57,14 +58,21 @@ def to_bounds(lower, upper) -> list[Bounds]:
 
 
 def attach_samples(trace: Trace, net: Network, box: InputBox, n: int = N_SAMPLES, seed: int = 0) -> None:
-    '''Run the real network on random inputs (plus the box corners) and store the
+    '''Run the real network on inputs spread over the box (plus its corners) and store the
     range each neuron actually reaches: an inner estimate of its true range, drawn
     inside the interval bars to show how loose a bound is.'''
     lower, upper = box.tensors()
-    gen = torch.Generator().manual_seed(seed)
-    xs = lower + (upper - lower) * torch.rand(n, len(lower), generator=gen, dtype=DTYPE)
+    # quasi-Monte Carlo (scrambled Sobol): spreads the points evenly over the box instead of
+    # the clumps and gaps of plain random sampling, so even the first 100 cover it well
+    sobol = torch.quasirandom.SobolEngine(len(lower), scramble=True, seed=seed)
+    xs = lower + (upper - lower) * sobol.draw(n, dtype=DTYPE)
     if len(lower) <= 10:
         corners = torch.tensor(list(itertools.product(*zip(box.lower, box.upper))), dtype=DTYPE)
         xs = torch.cat([xs, corners])
-    for stage, vals in zip(trace.stages, net.forward_stages(xs)):
+    values = net.forward_stages(xs)
+    for stage, vals in zip(trace.stages, values):
         stage.sampled = to_bounds(vals.min(dim=0).values, vals.max(dim=0).values)
+    # a few of the random inputs and their outputs, for the picture on the input step
+    k = min(N_SHOWN, n)
+    if trace.steps and trace.steps[0].kind == 'input':
+        trace.steps[0].detail['samples'] = {'inputs': xs[:k].tolist(), 'outputs': values[-1][:k].tolist()}

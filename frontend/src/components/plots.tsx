@@ -205,25 +205,92 @@ export function ReluPlot({ pre, relax, used, small, lineLabels = true }: {
   )
 }
 
-/** The input region when there are exactly two inputs. */
-export function BoxPlot({ lower, upper }: { lower: number[]; upper: number[] }) {
-  const S = 200
-  const m = 28
-  const [a, b] = niceRange([lower[0], upper[0], lower[1], upper[1], -1, 1])
-  const s = (v: number) => m + ((v - a) / (b - a)) * (S - 2 * m)
-  const sy = (v: number) => S - s(v)
+/**
+ * A region and some points in it: a 2D scatter when there are two dimensions, otherwise
+ * one strip per dimension (the interval, with the points spread slightly for visibility).
+ */
+export function SamplePlot({ box, points, name, proven }: {
+  box: Bounds[]
+  points: number[][]
+  /** variable letter for the axis labels, e.g. x or y */
+  name: string
+  /** style the box as bounds to be proven (not a given region) */
+  proven?: boolean
+}) {
+  const boxClass = `sample-box ${proven ? 'proven' : ''}`
+  if (box.length === 2) {
+    const S = 180
+    const m = 26
+    const ml = 30 // room for the numbers on the left and underneath
+    const mb = 22
+    const rx = niceRange([box[0].lower, box[0].upper, ...points.map((p) => p[0])])
+    const ry = niceRange([box[1].lower, box[1].upper, ...points.map((p) => p[1])])
+    const sx = (v: number) => ml + ((v - rx[0]) / (rx[1] - rx[0])) * (S - ml - m)
+    const sy = (v: number) => S - mb - ((v - ry[0]) / (ry[1] - ry[0])) * (S - mb - m)
+    // numbers sit right beside an axis when the box is on one side of it (like the ReLU plot),
+    // else along the plot's edge; dashed guides run from the box's corners to them
+    const baseY = box[1].lower >= 0 ? sy(0) : S - mb
+    const baseX = box[0].lower >= 0 ? sx(0) : ml
+    const xt = [{ v: box[0].lower, c: 'lo' }, { v: box[0].upper, c: 'hi' }]
+    const yt = [{ v: box[1].lower, c: 'lo' }, { v: box[1].upper, c: 'hi' }]
+    // one 0 at the origin, when both numbers rows meet there and it has room
+    const zero = baseY === sy(0) && baseX === sx(0) &&
+      xt.every((t) => Math.abs(sx(t.v) - sx(0)) > 12) && yt.every((t) => Math.abs(sy(t.v) - sy(0)) > 10)
+    return (
+      <svg viewBox={`0 0 ${S} ${S}`} className="sample-plot" role="img" aria-label={`${name} region with ${points.length} points`}>
+        <line x1={ml} x2={S - m + 6} y1={sy(0)} y2={sy(0)} className="axis" />
+        <line x1={sx(0)} x2={sx(0)} y1={m - 6} y2={S - mb} className="axis" />
+        <rect x={sx(box[0].lower)} y={sy(box[1].upper)} width={Math.max(sx(box[0].upper) - sx(box[0].lower), 1.5)}
+          height={Math.max(sy(box[1].lower) - sy(box[1].upper), 1.5)} className={boxClass} />
+        {xt.map((t, k) => (
+          <g key={`x${k}`}>
+            {sy(box[1].lower) < baseY - 1 && <line x1={sx(t.v)} x2={sx(t.v)} y1={sy(box[1].lower)} y2={baseY} className="guide" />}
+            {(k === 0 || sx(xt[1].v) - sx(xt[0].v) > 12) && (
+              <text x={sx(t.v)} y={baseY + 13} textAnchor="middle" className={`axis-text ${t.c}`}>{fmt(t.v)}</text>
+            )}
+          </g>
+        ))}
+        {yt.map((t, k) => (
+          <g key={`y${k}`}>
+            {sx(box[0].lower) > baseX + 1 && <line x1={baseX} x2={sx(box[0].lower)} y1={sy(t.v)} y2={sy(t.v)} className="guide" />}
+            {(k === 0 || sy(yt[0].v) - sy(yt[1].v) > 10) && (
+              <text x={baseX - 5} y={sy(t.v) + 4} textAnchor="end" className={`axis-text ${t.c}`}>{fmt(t.v)}</text>
+            )}
+          </g>
+        ))}
+        {zero && <text x={sx(0) - 5} y={sy(0) + 13} textAnchor="end" className="axis-text">0</text>}
+        {points.map((p, k) => <circle key={k} cx={sx(p[0])} cy={sy(p[1])} r={1.9} className="sample-dot" />)}
+        <text x={S - m + 8} y={sy(0) + 4} className="axis-label">{name}<tspan className="m-txt" fontSize={10} dy={3}>1</tspan></text>
+        <text x={sx(0) + 5} y={m - 10} className="axis-label">{name}<tspan className="m-txt" fontSize={10} dy={3}>2</tspan></text>
+      </svg>
+    )
+  }
+  const W = 180
+  const row = 38 // strip plus a line of numbers under it
+  const l = 22
+  const H = box.length * row + 8
   return (
-    <svg viewBox={`0 0 ${S} ${S}`} className="box-plot" role="img" aria-label="input box">
-      <line x1={m - 6} x2={S - m + 6} y1={sy(0)} y2={sy(0)} className="axis" />
-      <line x1={s(0)} x2={s(0)} y1={m - 6} y2={S - m + 6} className="axis" />
-      <rect x={s(lower[0])} y={sy(upper[1])} width={Math.max(s(upper[0]) - s(lower[0]), 1.5)}
-        height={Math.max(sy(lower[1]) - sy(upper[1]), 1.5)} className="box-fill" />
-      <text x={S - m + 8} y={sy(0) + 4} className="axis-label">x<tspan className="m-txt" fontSize={10} dy={3}>1</tspan></text>
-      <text x={s(0) + 5} y={m - 10} className="axis-label">x<tspan className="m-txt" fontSize={10} dy={3}>2</tspan></text>
-      <text x={s(lower[0])} y={S - 8} className="axis-text lo" textAnchor="middle">{fmt(lower[0])}</text>
-      <text x={s(upper[0])} y={S - 8} className="axis-text hi" textAnchor="middle">{fmt(upper[0])}</text>
-      <text x={8} y={sy(lower[1]) + 4} className="axis-text lo">{fmt(lower[1])}</text>
-      <text x={8} y={sy(upper[1]) + 4} className="axis-text hi">{fmt(upper[1])}</text>
+    <svg viewBox={`0 0 ${W} ${H}`} className="sample-plot" role="img" aria-label={`${name} intervals with ${points.length} points`}>
+      {box.map((b, i) => {
+        const r = niceRange([b.lower, b.upper, ...points.map((p) => p[i])])
+        const s = (v: number) => l + 6 + ((v - r[0]) / (r[1] - r[0])) * (W - l - 14)
+        const cy = 6 + i * row + 12
+        return (
+          <g key={i}>
+            <text x={2} y={cy + 4} className="axis-label">{name}<tspan className="m-txt" fontSize={10} dy={3}>{i + 1}</tspan></text>
+            <rect x={s(b.lower)} y={cy - 7} width={Math.max(s(b.upper) - s(b.lower), 1.5)} height={14} rx={3} className={boxClass} />
+            <text x={s(b.lower)} y={cy + 20} textAnchor="middle" className="axis-text lo">{fmt(b.lower)}</text>
+            {s(b.upper) - s(b.lower) > 14 && (
+              <text x={s(b.upper)} y={cy + 20} textAnchor="middle" className="axis-text hi">{fmt(b.upper)}</text>
+            )}
+            {points.map((p, k) => (
+              // spread the points up and down a little so they don't all sit on one line
+              <circle key={k} cx={s(p[i])} cy={cy + (((k * 37) % 11) - 5) * 0.9} r={1.6} className="sample-dot" />
+            ))}
+          </g>
+        )
+      })}
     </svg>
   )
 }
+

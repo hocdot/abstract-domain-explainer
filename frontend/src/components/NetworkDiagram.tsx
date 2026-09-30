@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { fmt, textLin, textSym } from '../format'
 import { MathSpans, mlin, mtxt, mvar, mwidth, type MTok } from './SvgMath'
 import type { DiagramFocus, LinBound, Network, Stage, Trace } from '../types'
@@ -13,7 +13,6 @@ const GAP_Y = 36 // bias label sits above each neuron, inside this gap
 const GAP_Y_EQ = 67 // ... plus two bound equations under the neuron above it
 const EXACT_H = 17 // ... plus one more line for "h = ..." under always-active/inactive ReLUs
 const EQ_MAX_W = 210
-const ARROW_HEAD = 8
 const TOP = 64 // column titles + room for the first row's bias labels
 const PAD = 12
 const ZOOMS = [0.5, 0.67, 0.8, 1, 1.25, 1.5, 2]
@@ -114,7 +113,6 @@ export function NetworkDiagram({ network, trace, step, focus, onJump, onEditWeig
   const [editing, setEditing] = useState<{ target: Target; left: number; top: number } | null>(null)
   const [zoom, setZoom] = useState<number | 'fit'>('fit')
   const [showEq, setShowEq] = useState(true)
-  const arrowId = `arrow-${useId().replace(/:/g, '')}`
   const hasEq = trace.stages.some((s) => s.relax.length > 0 || (s.index > 0 && s.linear.length > 0))
   const eqOn = hasEq && showEq
 
@@ -289,16 +287,6 @@ export function NetworkDiagram({ network, trace, step, focus, onJump, onEditWeig
           role="img"
           aria-label="Network diagram with the bounds of every neuron"
         >
-          {/* arrowhead for the z -> h activation arrows */}
-          <defs>
-            {/* fixed size (not scaled by stroke width), one per state so the head matches its line */}
-            {['', '-on'].map((v) => (
-              <marker key={v} id={arrowId + v} viewBox="0 0 10 10" refX="0" refY="5" markerUnits="userSpaceOnUse"
-                markerWidth={ARROW_HEAD} markerHeight={ARROW_HEAD} orient="auto">
-                <path d="M0,1.5 L10,5 L0,8.5 z" className={`arrow-head${v}`} />
-              </marker>
-            ))}
-          </defs>
 
           {/* column headers: one title per layer, one label per stage */}
           {layout.columns.map((col, c) => {
@@ -308,7 +296,7 @@ export function NetworkDiagram({ network, trace, step, focus, onJump, onEditWeig
                 <text x={layout.colX[c] + layout.colW[c] / 2} y={18} textAnchor="middle" className="col-title">{title}</text>
                 {col.map((s) => (
                   <text key={s.index} x={layout.pos[s.index][0].x + CELL_W / 2} y={34} textAnchor="middle" className="col-sub">
-                    {s.kind === 'input' ? 'input box' : s.kind === 'affine' ? 'Linear' : 'ReLU'}
+                    {s.kind === 'input' ? 'Input box' : s.kind === 'affine' ? 'Linear' : 'ReLU'}
                   </text>
                 ))}
               </g>
@@ -365,17 +353,14 @@ export function NetworkDiagram({ network, trace, step, focus, onJump, onEditWeig
               const x0 = layout.pos[s.index - 1][j].x + CELL_W
               const y0 = p.y + CELL_H / 2
               const on = isActive(s.index, j)
-              // stop short of the dashed outline (4px out, plus its halo) so the head is never covered
-              const tip = p.x - 8
-              // centre of the visible shaft (the head takes the last ARROW_HEAD px), so both halves match
-              const mid = (x0 + tip - ARROW_HEAD) / 2
+              // a plain line into h, like the weight edges into z; the ReLU glyph sits at its middle
+              const mid = (x0 + p.x) / 2
               const relax = s.relax[j]
               const eqW = p.x - x0 - 10
               return (
                 <g key={`act-${s.index}-${j}`} className={`act ${on ? 'on' : ''}`}>
                   <g className={focusing && !on ? 'dim' : ''}>
-                    {/* the line stops where the head begins; the head reaches the tip */}
-                    <line x1={x0} x2={tip - ARROW_HEAD} y1={y0} y2={y0} markerEnd={`url(#${arrowId}${on ? '-on' : ''})`} />
+                    <line x1={x0} x2={p.x} y1={y0} y2={y0} />
                     <g className="relu-glyph" transform={`translate(${mid},${y0})`}>
                       <circle r={10} />
                       <polyline points="-5.5,2.5 0,2.5 5,-3.5" />

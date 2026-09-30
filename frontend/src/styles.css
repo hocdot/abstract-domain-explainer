@@ -147,7 +147,6 @@ kbd {
   letter-spacing: -1px;
 }
 .brand h1 { font-family: var(--font-display); font-size: 28px; line-height: 1; letter-spacing: 0.2px; }
-.tagline { margin: 3px 0 0; color: var(--ink-3); font-size: 13px; }
 
 .banner {
   margin: 12px 24px 0;
@@ -405,8 +404,6 @@ kbd {
 .act.on line { stroke: var(--ink); opacity: 0.95; }
 .act .dim { opacity: 0.35; }
 .eq.faint { opacity: 0.45; }
-.arrow-head { fill: var(--ink-2); }
-.arrow-head-on { fill: var(--ink); }
 .relu-glyph circle { fill: var(--surface); stroke: var(--line-2); }
 .relu-glyph polyline { fill: none; stroke: var(--ink-2); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 .relu-glyph { pointer-events: none; }
@@ -528,8 +525,6 @@ kbd {
 
 .split { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin: 4px 0 14px; }
 .bound-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
-.box-plot { width: 170px; height: auto; }
-.box-fill { fill: var(--band); stroke: var(--accent); stroke-width: 1.5; }
 
 .terms { width: 100%; border-collapse: collapse; margin: 6px 0 14px; font-size: 12.5px; }
 .terms th {
@@ -680,3 +675,17 @@ kbd {
 .lambda-compare .pick-badge { font-size: 11px; padding: 1px 7px; border-radius: 999px; color: var(--lo); background: var(--lo-soft, var(--surface-2)); }
 .lambda-compare p { margin: 2px 0; }
 .lambda-compare .katex-display { margin: 4px 0; font-size: 0.92em; overflow-x: auto; overflow-y: hidden; }
+
+/* input step: inputs from the box, pushed through the network */
+.io-figure { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 4px; margin: 10px 0 4px; }
+.io-figure figure { margin: 0; min-width: 0; }
+.io-figure figcaption { font-size: 12px; font-weight: 600; color: var(--ink-2); text-align: center; }
+.io-figure .bound-list { margin: 2px 0 0; padding: 0; font-size: 0.92em; text-align: center; }
+.io-arrow { display: flex; flex-direction: column; align-items: center; color: var(--ink-3); font-size: 11px; }
+.io-arrow svg { width: 40px; height: 14px; }
+.io-arrow path { fill: none; stroke: var(--ink-3); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.sample-plot { display: block; width: 100%; height: auto; }
+.sample-plot .sample-box { fill: var(--band); stroke: var(--ink-3); stroke-width: 1.2; }
+.sample-plot .sample-box.proven { fill: var(--accent-soft); fill-opacity: 0.5; stroke: var(--accent); }
+.sample-plot .guide { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 3 3; }
+.sample-plot .sample-dot { fill: var(--ink-2); opacity: 0.65; }

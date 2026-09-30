@@ -1,4 +1,4 @@
-# BoundLab
+# Abstract Domain Explainer
 
 An interactive, step-by-step explainer of abstract domains for neural network
 verification. Small toy networks, with every bound traced from input to output.
