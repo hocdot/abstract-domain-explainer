@@ -164,6 +164,14 @@ export default function App() {
           <h1>Abstract Domain Explainer</h1>
         </div>
         <div className="row gap-sm">
+          <a
+            className="btn ghost small"
+            href="https://github.com/hocdot/abstract-domain-explainer/issues/new"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Suggest an idea
+          </a>
           <button className="btn ghost small" onClick={() => setControlsOpen(!controlsOpen)} aria-pressed={!controlsOpen}>
             {controlsOpen ? 'Hide controls' : 'Show controls'}
           </button>

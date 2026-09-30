@@ -208,6 +208,8 @@ kbd {
   border-radius: 10px;
   background: var(--surface);
   cursor: pointer;
+  color: inherit;
+  text-decoration: none;
   transition: background 0.15s, border-color 0.15s, transform 0.05s;
 }
 .btn:hover:not(:disabled) { background: var(--surface-2); }
