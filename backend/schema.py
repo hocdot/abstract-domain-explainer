@@ -19,6 +19,28 @@ class Bounds(BaseModel):
     upper: float
 
 
+class LinBound(BaseModel):
+    '''sum_i coeffs[i] * x_i + const, a linear function of the inputs.'''
+    coeffs: list[float]
+    const: float
+
+
+class LinearBounds(BaseModel):
+    lower: LinBound
+    upper: LinBound
+
+
+class Line(BaseModel):
+    slope: float
+    bias: float
+
+
+class Relaxation(BaseModel):
+    '''lower.slope * z + lower.bias <= h <= upper.slope * z + upper.bias'''
+    lower: Line
+    upper: Line
+
+
 class Stage(BaseModel):
     index: int
     kind: Literal['input', 'affine', 'relu']
@@ -27,6 +49,12 @@ class Stage(BaseModel):
     sup: int | None         # layer superscript, e.g. z^(1); None for x and y
     size: int
     bounds: list[Bounds]
+    # min/max actually reached on sampled inputs: an inner estimate of the true range
+    sampled: list[Bounds] = []
+    # linear bounds over the inputs, for domains that have them (DeepPoly, CROWN, ...)
+    linear: list[LinearBounds] = []
+    # ReLU stages only: per-neuron linear bounds in terms of the pre-activation
+    relax: list[Relaxation] = []
 
 
 class Step(BaseModel):
@@ -37,9 +65,9 @@ class Step(BaseModel):
 
 
 class Check(BaseModel):
-    '''Independent re-derivation of the bounds, so anyone can audit the domain.'''
-    description: str
-    max_abs_diff: float
+    '''An independent test of the bounds, so anyone can audit the domain.'''
+    label: str              # e.g. 'Sound on sampled inputs'
+    detail: str             # e.g. '4,000 inputs, all inside their bounds'
     ok: bool
 
 
@@ -47,7 +75,7 @@ class Trace(BaseModel):
     domain: str
     stages: list[Stage]
     steps: list[Step]
-    check: Check
+    checks: list[Check]
 
 
 class DomainInfo(BaseModel):

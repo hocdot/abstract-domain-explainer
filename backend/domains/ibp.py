@@ -6,7 +6,7 @@ The explanation re-derives each neuron with the textbook endpoint rule
     lower(z_j) = b_j + sum_i  w_ji * (lower(x_i) if w_ji >= 0 else upper(x_i))
     upper(z_j) = b_j + sum_i  w_ji * (upper(x_i) if w_ji >= 0 else lower(x_i))
 
-and ``Trace.check`` reports how far the two derivations are apart.
+and a ``Check`` reports how far the two derivations are apart.
 '''
 import torch
 
@@ -78,14 +78,15 @@ class IBP(Domain):
                 stages[s].bounds = to_bounds(value.lower, value.upper)
                 s += 1
 
-            # neuron by neuron: z_j then h_j, so each ReLU step follows its own sum
+            # layer by layer: every weighted sum of the layer, then every ReLU
             for j in range(layer.out_dim):
                 detail = _affine_detail(W, b, j, prev, pre if relu else value)
                 worst = max(worst,
                             abs(detail['textbook']['lower'] - detail['center'] + detail['radius']),
                             abs(detail['textbook']['upper'] - detail['center'] - detail['radius']))
                 steps.append(Step(kind='ibp.affine', stage=z, neuron=j, detail=detail))
-                if relu:
+            if relu:
+                for j in range(layer.out_dim):
                     l, u = float(pre.lower[j]), float(pre.upper[j])
                     steps.append(Step(kind='ibp.relu', stage=z + 1, neuron=j, detail={
                         'pre': {'lower': l, 'upper': u},
@@ -94,8 +95,8 @@ class IBP(Domain):
 
         steps.append(Step(kind='output', stage=len(stages) - 1, neuron=None, detail={}))
         check = Check(
-            description='Engine (center/radius form) vs. textbook endpoint rule, max |difference|',
-            max_abs_diff=worst,
+            label='Engine matches the textbook rule',
+            detail=f'center/radius vs. endpoint rule, max difference {worst:.1e}',
             ok=worst <= 1e-9,
         )
-        return Trace(domain=self.key, stages=stages, steps=steps, check=check)
+        return Trace(domain=self.key, stages=stages, steps=steps, checks=[check])

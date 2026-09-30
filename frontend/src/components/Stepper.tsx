@@ -6,10 +6,12 @@ interface Props {
   trace: Trace
   index: number
   onIndex: (i: number) => void
+  onPrev: () => void
+  onNext: () => void
+  atStart: boolean
+  atEnd: boolean
   playing: boolean
   onPlaying: (p: boolean) => void
-  showAll: boolean
-  onShowAll: (v: boolean) => void
 }
 
 const Icon = ({ d }: { d: string }) => (
@@ -27,7 +29,7 @@ const ICONS = {
   pause: 'M6 5h4v14H6zM14 5h4v14h-4z',
 }
 
-export function Stepper({ trace, index, onIndex, playing, onPlaying, showAll, onShowAll }: Props) {
+export function Stepper({ trace, index, onIndex, onPrev, onNext, atStart, atEnd, playing, onPlaying }: Props) {
   const n = trace.steps.length
   // group consecutive steps by layer so the progress bar reads x | layer 1 | ... | y | ✓
   const lastLayer = trace.stages[trace.stages.length - 1].layer
@@ -46,13 +48,13 @@ export function Stepper({ trace, index, onIndex, playing, onPlaying, showAll, on
         <button className="icon-btn" onClick={() => onIndex(0)} disabled={index === 0} title="First step (Home)">
           <Icon d={ICONS.first} />
         </button>
-        <button className="icon-btn" onClick={() => onIndex(index - 1)} disabled={index === 0} title="Previous step (←)">
+        <button className="icon-btn" onClick={onPrev} disabled={atStart} title="Previous (←)">
           <Icon d={ICONS.prev} />
         </button>
         <button className="icon-btn primary" onClick={() => onPlaying(!playing)} title="Play / pause (Space)">
           <Icon d={playing ? ICONS.pause : ICONS.play} />
         </button>
-        <button className="icon-btn" onClick={() => onIndex(index + 1)} disabled={index === n - 1} title="Next step (→)">
+        <button className="icon-btn" onClick={onNext} disabled={atEnd} title="Next (→)">
           <Icon d={ICONS.next} />
         </button>
         <button className="icon-btn" onClick={() => onIndex(n - 1)} disabled={index === n - 1} title="Last step (End)">
@@ -61,10 +63,6 @@ export function Stepper({ trace, index, onIndex, playing, onPlaying, showAll, on
         <span className="step-count mono">
           {index + 1}<span className="muted"> / {n}</span>
         </span>
-        <label className="toggle">
-          <input type="checkbox" checked={showAll} onChange={(e) => onShowAll(e.target.checked)} />
-          <span>Show all bounds</span>
-        </label>
       </div>
 
       <div className="progress" role="group" aria-label="Steps">

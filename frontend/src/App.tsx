@@ -5,6 +5,7 @@ import { ExplainPanel } from './components/ExplainPanel'
 import { NetworkDiagram } from './components/NetworkDiagram'
 import { Stepper } from './components/Stepper'
 import { resizeBox, setBias, setWeight, sizesOf } from './network'
+import { viewFor } from './explain'
 import type { DomainInfo, InputBox, Network, Preset } from './types'
 import { useTrace } from './useTrace'
 
@@ -41,23 +42,51 @@ export default function App() {
   const [presetKey, setPresetKey] = useState<string | null>(null)
   const [network, setNetwork] = useState<Network | null>(null)
   const [box, setBox] = useState<InputBox | null>(null)
-  const [domain, setDomain] = useState('ibp')
+  const [domain, setDomain] = useState(() => new URLSearchParams(location.search).get('domain') ?? 'ibp')
   const [index, setIndex] = useState(() => Number(new URLSearchParams(location.search).get('step') ?? 1) - 1 || 0)
-  const [showAll, setShowAll] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [seed, setSeed] = useState(1)
   const [controlsOpen, setControlsOpen] = useState(true)
+  const [sub, setSub] = useState(() => Number(new URLSearchParams(location.search).get('sub') ?? 1) - 1 || 0)
 
   const { result, error } = useTrace(domain, network, box)
   const trace = result?.trace
   const n = trace?.steps.length ?? 1
   const clamped = Math.min(index, n - 1)
 
+  // Some steps (DeepPoly's back-substitution) have sub-steps that Next walks
+  // through before moving on to the next neuron.
+  const subCount = (i: number) => {
+    const s = trace?.steps[i]
+    return s ? (viewFor(s.kind).subSteps?.(s) ?? 1) : 1
+  }
+  const subC = Math.min(sub, subCount(clamped) - 1)
+  const atStart = clamped === 0 && subC === 0
+  const atEnd = clamped === n - 1 && subC === subCount(clamped) - 1
+  const jumpTo = (i: number) => {
+    setIndex(Math.max(0, Math.min(n - 1, i)))
+    setSub(0)
+  }
+  const forward = () => {
+    if (subC < subCount(clamped) - 1) setSub(subC + 1)
+    else if (clamped < n - 1) jumpTo(clamped + 1)
+  }
+  const backward = () => {
+    if (subC > 0) setSub(subC - 1)
+    else if (clamped > 0) {
+      setIndex(clamped - 1)
+      setSub(subCount(clamped - 1) - 1)
+    }
+  }
+  const curStep = trace?.steps[clamped]
+  const focus = trace && curStep ? (viewFor(curStep.kind).focus?.(curStep, trace, subC) ?? null) : null
+
   const load = useCallback((p: Preset) => {
     setPresetKey(p.key)
     setNetwork(p.network)
     setBox(p.input)
     setIndex(0)
+    setSub(0)
     setPlaying(false)
   }, [])
 
@@ -77,35 +106,33 @@ export default function App() {
       .catch((e: Error) => setBootError(e.message))
   }, [load])
 
-  const go = useCallback((i: number) => setIndex(Math.max(0, Math.min(n - 1, i))), [n])
-
   // autoplay
   useEffect(() => {
     if (!playing) return
-    if (clamped >= n - 1) {
+    if (atEnd) {
       setPlaying(false)
       return
     }
-    const t = setTimeout(() => setIndex(clamped + 1), 1400)
+    const t = setTimeout(forward, 1400)
     return () => clearTimeout(t)
-  }, [playing, clamped, n])
+  })
 
   // keyboard: ← → Home End Space (ignored while typing in a field)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement
       if (el.closest('input, select, textarea, [contenteditable]')) return
-      if (e.key === 'ArrowRight') go(clamped + 1)
-      else if (e.key === 'ArrowLeft') go(clamped - 1)
-      else if (e.key === 'Home') go(0)
-      else if (e.key === 'End') go(n - 1)
+      if (e.key === 'ArrowRight') forward()
+      else if (e.key === 'ArrowLeft') backward()
+      else if (e.key === 'Home') jumpTo(0)
+      else if (e.key === 'End') jumpTo(n - 1)
       else if (e.key === ' ' && !el.closest('button')) setPlaying((p) => !p)
       else return
       e.preventDefault()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [go, clamped, n])
+  })
 
   const editNetwork = (net: Network) => {
     setPresetKey(null)
@@ -125,7 +152,7 @@ export default function App() {
     const i = trace.steps.findIndex((s) => s.stage === stage && (s.neuron === neuron || s.neuron == null))
     if (i >= 0) {
       setPlaying(false)
-      setIndex(i)
+      jumpTo(i)
     }
   }
 
@@ -176,7 +203,7 @@ export default function App() {
                   network={result.network}
                   trace={trace}
                   step={clamped}
-                  showAll={showAll}
+                  focus={focus}
                   onJump={jump}
                   onEditWeight={(k, j, i, v) => editNetwork(setWeight(network, k, j, i, v))}
                   onEditBias={(k, j, v) => editNetwork(setBias(network, k, j, v))}
@@ -198,15 +225,27 @@ export default function App() {
                   index={clamped}
                   onIndex={(i) => {
                     setPlaying(false)
-                    go(i)
+                    jumpTo(i)
                   }}
+                  onPrev={() => { setPlaying(false); backward() }}
+                  onNext={() => { setPlaying(false); forward() }}
+                  atStart={atStart}
+                  atEnd={atEnd}
                   playing={playing}
                   onPlaying={setPlaying}
-                  showAll={showAll}
-                  onShowAll={setShowAll}
                 />
               </section>
-              <ExplainPanel trace={trace} index={clamped} onIndex={(i) => { setPlaying(false); go(i) }} />
+              <ExplainPanel
+                trace={trace}
+                index={clamped}
+                sub={subC}
+                subCount={subCount(clamped)}
+                onSub={(k) => { setPlaying(false); setSub(k) }}
+                onPrev={() => { setPlaying(false); backward() }}
+                onNext={() => { setPlaying(false); forward() }}
+                atStart={atStart}
+                atEnd={atEnd}
+              />
             </>
           ) : (
             <div className="card placeholder">Computing bounds…</div>

@@ -71,4 +71,4 @@ def analyze(req: AnalyzeRequest) -> Trace:
     domain = REGISTRY.get(req.domain)
     if domain is None:
         raise HTTPException(400, f'unknown domain {req.domain!r}; available: {sorted(REGISTRY)}')
-    return domain.analyze(req.network, req.input)
+    return domain.run(req.network, req.input)

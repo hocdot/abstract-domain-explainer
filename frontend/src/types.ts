@@ -31,6 +31,53 @@ export interface Stage {
   sup: number | null
   size: number
   bounds: Bounds[]
+  /** min/max reached on sampled inputs */
+  sampled: Bounds[]
+  /** linear bounds over the inputs (DeepPoly, CROWN, ...); empty for IBP */
+  linear: LinearBounds[]
+  /** ReLU stages: per-neuron lines in terms of the pre-activation */
+  relax: Relaxation[]
+}
+
+/** slope * z + bias */
+export interface Line {
+  slope: number
+  bias: number
+}
+
+export type Side = 'lower' | 'upper'
+
+/** What the diagram should highlight while a step walks through sub-steps
+ *  (e.g. one back-substitution at a time). */
+export interface DiagramFocus {
+  /** stage the current lower/upper expressions of the target neuron are written over */
+  stage: number
+  lower: LinBound
+  upper: LinBound
+  /** the bound being walked; null once the walk is done and both are final */
+  side: Side | null
+  /** whether the target's interval is known yet (only at the concretize step) */
+  concrete: boolean
+  /** relaxation lines just substituted in */
+  lines: { stage: number; neuron: number; line: Side }[]
+  /** weighted sums just expanded */
+  expanded: { stage: number; neurons: number[] } | null
+}
+
+export interface Relaxation {
+  lower: Line
+  upper: Line
+}
+
+/** sum_i coeffs[i] * x_i + const */
+export interface LinBound {
+  coeffs: number[]
+  const: number
+}
+
+export interface LinearBounds {
+  lower: LinBound
+  upper: LinBound
 }
 
 export interface Step<D = Record<string, unknown>> {
@@ -44,7 +91,7 @@ export interface Trace {
   domain: string
   stages: Stage[]
   steps: Step[]
-  check: { description: string; max_abs_diff: number; ok: boolean }
+  checks: { label: string; detail: string; ok: boolean }[]
 }
 
 export interface DomainInfo {

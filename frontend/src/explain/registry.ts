@@ -1,9 +1,12 @@
 import type { FC, ReactNode } from 'react'
-import type { Step, Trace } from '../types'
+import type { DiagramFocus, Step, Trace } from '../types'
 
 export interface StepProps {
   step: Step
   trace: Trace
+  /** current sub-step (for views that define `subSteps`) and a way to jump */
+  sub: number
+  onSub: (k: number) => void
 }
 
 /** How one step kind is explained. Domains register their own kinds
@@ -14,10 +17,15 @@ export interface StepView {
   /** Rich heading for the explanation panel; defaults to `title`. */
   heading?: (step: Step, trace: Trace) => ReactNode
   Body: FC<StepProps>
+  /** Number of sub-steps Next walks through before the next step (default 1). */
+  subSteps?: (step: Step) => number
+  /** What the diagram highlights at a given sub-step. */
+  focus?: (step: Step, trace: Trace, sub: number) => DiagramFocus | null
 }
 
 export const DOMAIN_NAMES: Record<string, string> = {
   ibp: 'Interval Bound Propagation (IBP)',
+  deeppoly: 'DeepPoly (equivalently, CROWN)',
 }
 
 const VIEWS: Record<string, StepView> = {}

@@ -73,7 +73,7 @@ function AffineBody({ step, trace }: StepProps) {
   return (
     <>
       <p>
-        <Tex>{texSym(stage, j)}</Tex> is a weighted sum of the neurons on its left:
+        <Tex>{texSym(stage, j)}</Tex> is linear, a weighted sum of the neurons on its left:
       </p>
       <Tex block>{`${texSym(stage, j)} = ${linearCombo(d.terms, src, d.bias)}`}</Tex>
       <p>
@@ -125,7 +125,8 @@ function AffineBody({ step, trace }: StepProps) {
       <Tex block>{boundDerivation('lower', stage, j, src, d, out.lower)}</Tex>
       <Tex block>{boundDerivation('upper', stage, j, src, d, out.upper)}</Tex>
 
-      <IntervalBar bounds={out} range={range} label={<Tex>{`${texSym(stage, j)} \\in`}</Tex>} />
+      <IntervalBar bounds={out} range={range} sampled={stage.sampled[j]} label={<Tex>{`${texSym(stage, j)} \\in`}</Tex>} />
+      <p className="hint muted">Dark inner bar: values the neuron actually reaches on thousands of sampled inputs.</p>
 
       {firstLayer ? (
         <div className="callout">
@@ -198,8 +199,8 @@ function ReluBody({ step, trace }: StepProps) {
 
 export const ibpViews: Record<string, StepView> = {
   'ibp.affine': {
-    title: (step, trace) => `Bounding ${textSym(trace.stages[step.stage], step.neuron!)}: a weighted sum`,
-    heading: (step, trace) => <>Bounding <Tex>{texSym(trace.stages[step.stage], step.neuron!)}</Tex>: a weighted sum</>,
+    title: (step, trace) => `Bounding ${textSym(trace.stages[step.stage], step.neuron!)}: a linear layer`,
+    heading: (step, trace) => <>Bounding <Tex>{texSym(trace.stages[step.stage], step.neuron!)}</Tex>: a linear layer</>,
     Body: AffineBody,
   },
   'ibp.relu': {

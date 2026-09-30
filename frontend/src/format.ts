@@ -33,5 +33,38 @@ export function textSym(stage: Pick<Stage, 'letter' | 'sup'>, j?: number): strin
 export function stageName(stage: Stage, last: boolean): string {
   if (stage.kind === 'input') return 'Input'
   if (last) return 'Output'
-  return stage.kind === 'affine' ? `Layer ${stage.layer} · weighted sum` : `Layer ${stage.layer} · ReLU`
+  return stage.kind === 'affine' ? `Layer ${stage.layer} · Linear` : `Layer ${stage.layer} · ReLU`
+}
+
+const EPS = 1e-12
+
+/** TeX linear expression "0.5 x_1 - x_2 + 1", skipping zero coefficients. */
+export function texLin(coeffs: number[], sym: (i: number) => string, c: number): string {
+  const parts: string[] = []
+  coeffs.forEach((w, i) => {
+    if (Math.abs(w) < EPS) return
+    const a = Math.abs(w)
+    const coef = Math.abs(a - 1) < EPS ? '' : `${fmt(a)}\\,`
+    const s = sym(i)
+    parts.push(parts.length === 0 ? `${w < 0 ? '-' : ''}${coef}${s}` : ` ${w < 0 ? '-' : '+'} ${coef}${s}`)
+  })
+  if (Math.abs(c) >= EPS || parts.length === 0) {
+    parts.push(parts.length === 0 ? fmt(c) : ` ${c < 0 ? '-' : '+'} ${fmt(Math.abs(c))}`)
+  }
+  return parts.join('')
+}
+
+/** Plain-text linear expression, by default over the inputs: "x₁ + 0.5x₂ + 4". */
+export function textLin(coeffs: number[], c: number, sym = (i: number) => textSym({ letter: 'x', sup: null }, i)): string {
+  const parts: string[] = []
+  coeffs.forEach((w, i) => {
+    if (Math.abs(w) < EPS) return
+    const a = Math.abs(w)
+    const term = `${Math.abs(a - 1) < EPS ? '' : fmt(a)}${sym(i)}`
+    parts.push(parts.length === 0 ? `${w < 0 ? '−' : ''}${term}` : ` ${w < 0 ? '−' : '+'} ${term}`)
+  })
+  if (Math.abs(c) >= EPS || parts.length === 0) {
+    parts.push(parts.length === 0 ? fmt(c) : ` ${c < 0 ? '−' : '+'} ${fmt(Math.abs(c))}`)
+  }
+  return parts.join('')
 }

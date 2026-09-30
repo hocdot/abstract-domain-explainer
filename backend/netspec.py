@@ -60,12 +60,19 @@ class Network(BaseModel):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         '''Concrete forward pass, used for sampling and tests.'''
+        return self.forward_stages(x)[-1]
+
+    def forward_stages(self, x: torch.Tensor) -> list[torch.Tensor]:
+        '''Concrete value of every stage (x, z1, h1, z2, ...), same order as the trace.'''
+        out = [x]
         for layer in self.layers:
             W, b = layer.tensors()
             x = x @ W.T + b
+            out.append(x)
             if layer.activation == 'relu':
                 x = torch.relu(x)
-        return x
+                out.append(x)
+        return out
 
 
 class InputBox(BaseModel):

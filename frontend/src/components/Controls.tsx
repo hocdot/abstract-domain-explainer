@@ -4,8 +4,6 @@ import { NumberField } from './NumberField'
 
 // Shown greyed out so newcomers can see where the playground is heading.
 const PLANNED = [
-  { key: 'deeppoly', short: 'DeepPoly', summary: 'One linear lower and upper bound per neuron.' },
-  { key: 'crown', short: 'CROWN', summary: 'Linear bounds propagated backward from the output.' },
   { key: 'zonotope', short: 'Zonotope', summary: 'Shared noise symbols keep neurons correlated.' },
   { key: 'alpha-crown', short: 'α-CROWN', summary: 'CROWN with optimized ReLU slopes.' },
 ]
