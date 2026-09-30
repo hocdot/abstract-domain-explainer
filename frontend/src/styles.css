@@ -455,6 +455,9 @@ kbd {
 
 .tex-block { display: block; margin: 10px 0 14px; overflow-x: auto; overflow-y: hidden; }
 .tex-block .katex-display { margin: 0; text-align: left; }
+/* names the derivation under it, so the under/overline is not the only cue */
+.bound-label { margin-top: 12px; font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; }
+.bound-label + .tex-block { margin-top: 4px; }
 .tex-block .katex-display > .katex { text-align: left; }
 .katex { font-size: 1.08em; }
 .tex-lo { color: var(--lo); }

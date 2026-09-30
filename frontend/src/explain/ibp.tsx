@@ -71,7 +71,8 @@ function AffineBody({ step, trace }: StepProps) {
   return (
     <>
       <p>
-        <Tex>{texSym(stage, j)}</Tex> is linear, a weighted sum of the neurons on its left:
+        To compute <Tex>{texSym(stage, j)}</Tex>, the network multiplies {firstLayer ? 'each input' : 'each neuron of the previous layer'} by
+        the weight on its edge and adds the bias:
       </p>
       <Tex block>{`${texSym(stage, j)} = ${linearCombo(d.terms, src, d.bias)}`}</Tex>
       <p>
@@ -84,43 +85,40 @@ function AffineBody({ step, trace }: StepProps) {
       <table className="terms">
         <thead>
           <tr>
-            <th>input</th>
+            <th>term</th>
             <th>interval</th>
-            <th>weight</th>
-            <th><span className="lo">smallest</span> w·input</th>
-            <th><span className="hi">largest</span> w·input</th>
+            <th><span className="lo">smallest</span></th>
+            <th><span className="hi">largest</span></th>
           </tr>
         </thead>
         <tbody>
           {d.terms.map((t) => {
             const b = src.bounds[t.source]
+            const paren = (v: number) => (v < 0 ? `(${fmt(v)})` : fmt(v))
+            // the term at one end of the interval; the end is coloured like the
+            // interval column (lower blue, upper orange) so it can be traced back
+            const product = (pick: string, value: number, contrib: number, cls: string) => (
+              <td className="mono">
+                {paren(t.weight)} · <span className={pick === 'lower' ? 'lo' : 'hi'}>{paren(value)}</span>
+                {' = '}<span className={cls}>{fmt(contrib)}</span>
+              </td>
+            )
             return (
               <tr key={t.source} className={t.weight === 0 ? 'muted' : ''}>
-                <td><Tex>{texSym(src, t.source)}</Tex></td>
+                <td><Tex>{`${texNum(t.weight)} \\cdot ${texSym(src, t.source)}`}</Tex></td>
                 <td className="mono">[<span className="lo">{fmt(b.lower)}</span>, <span className="hi">{fmt(b.upper)}</span>]</td>
-                <td className="mono">{fmt(t.weight)}</td>
-                <td className="mono">
-                  <span className="uses">{t.lower_pick === 'lower' ? 'lower' : 'upper'} →</span>{' '}
-                  <span className="lo">{fmt(t.lower_contrib)}</span>
-                </td>
-                <td className="mono">
-                  <span className="uses">{t.upper_pick === 'lower' ? 'lower' : 'upper'} →</span>{' '}
-                  <span className="hi">{fmt(t.upper_contrib)}</span>
-                </td>
+                {product(t.lower_pick, t.lower_value, t.lower_contrib, 'lo')}
+                {product(t.upper_pick, t.upper_value, t.upper_contrib, 'hi')}
               </tr>
             )
           })}
-          <tr className="bias-row">
-            <td colSpan={2}>bias</td>
-            <td className="mono">{fmt(d.bias)}</td>
-            <td className="mono">{fmt(d.bias)}</td>
-            <td className="mono">{fmt(d.bias)}</td>
-          </tr>
         </tbody>
       </table>
 
-      <p>Add up each column:</p>
+      <p>Add up each term and the bias:</p>
+      <div className="bound-label lo">Lower bound</div>
       <Tex block>{boundDerivation('lower', stage, j, src, d, out.lower)}</Tex>
+      <div className="bound-label hi">Upper bound</div>
       <Tex block>{boundDerivation('upper', stage, j, src, d, out.upper)}</Tex>
 
       <IntervalBar bounds={out} range={range} sampled={stage.sampled[j]} label={<Tex>{`${texSym(stage, j)} \\in`}</Tex>} />

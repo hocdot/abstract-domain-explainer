@@ -283,14 +283,15 @@ function AffineBody({ step, trace, sub, onSub }: StepProps) {
   return (
     <>
       <p>
-        <Tex>{texSym(stage, j)}</Tex> is linear, a weighted sum of the neurons on its left:{' '}
+        To compute <Tex>{texSym(stage, j)}</Tex>, the network multiplies {first ? 'each input' : 'each neuron of the previous layer'} by
+        the weight on its edge and adds the bias:{' '}
         <Tex>{`${texSym(stage, j)} = ${expr(start.coeffs, src, start.const)}`}</Tex>.
       </p>
       {first ? (
         <p>The first layer depends on the inputs directly, so there is nothing to substitute: we plug in the box, just like IBP.</p>
       ) : (
         <p>
-          IBP would replace each neuron on the right by its interval, as if they could vary independently. DeepPoly
+          IBP would replace each neuron in this sum by its interval, as if they could vary independently. DeepPoly
           instead substitutes <strong>linear</strong> bounds backward, layer by layer, until only the inputs remain, so
           neurons that depend on the same inputs can cancel.
         </p>
