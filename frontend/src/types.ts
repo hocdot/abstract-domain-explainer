@@ -1,4 +1,4 @@
-// Mirrors backend/netspec.py and backend/schema.py.
+// The shapes the engine (src/engine) reads and writes.
 
 export type Activation = 'relu' | 'none'
 

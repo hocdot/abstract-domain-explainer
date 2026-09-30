@@ -1,23 +1,16 @@
-PY := .venv/bin/python
+.PHONY: setup dev test build preview
 
-.PHONY: setup backend frontend dev test build
-
-setup:            ## create the Python venv and install JS deps
-	python3.12 -m venv .venv
-	$(PY) -m pip install -r requirements-dev.txt
+setup:            ## install JS deps
 	cd frontend && npm install
 
-backend:          ## API on http://127.0.0.1:8000 (auto-reload)
-	$(PY) -m uvicorn backend.app:app --reload --port 8000
-
-frontend:         ## site on http://localhost:5173 (proxies /api to the backend)
+dev:              ## site on http://localhost:5173 (hot reload)
 	cd frontend && npm run dev
 
-dev:              ## run both; Ctrl-C stops both
-	@trap 'kill 0' INT TERM; $(MAKE) backend & $(MAKE) frontend & wait
-
-test:
-	$(PY) -m pytest backend -q
+test:             ## engine tests (Node's built-in runner)
+	cd frontend && npm test
 
 build:            ## static site in frontend/dist
 	cd frontend && npm run build
+
+preview:          ## the exact GitHub Pages build, on http://localhost:4173/abstract-domain-explainer/
+	cd frontend && npm run preview:pages

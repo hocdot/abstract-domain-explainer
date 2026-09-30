@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test": "node --no-warnings --test \"tests/**/*.test.ts\"",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:pages": "BASE_PATH=/abstract-domain-explainer/ npm run build && vite preview --base /abstract-domain-explainer/"
   },
   "dependencies": {
     "katex": "^0.18.9",
