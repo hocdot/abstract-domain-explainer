@@ -39,14 +39,15 @@ export function ExplainPanel({ trace, index, sub, subCount, onSub, onPrev, onNex
             {sub < subCount - 1 ? `Continue (${sub + 1}/${subCount}) →` : 'Next →'}
           </button>
         </div>
-        <ul className="checks">
-          {trace.checks.map((c) => (
+        {/* checks stay out of the way while they pass; a failure is worth showing */}
+        {trace.checks.some((c) => !c.ok) && <ul className="checks">
+          {trace.checks.filter((c) => !c.ok).map((c) => (
             <li key={c.label} className={`check ${c.ok ? 'ok' : 'bad'}`} title={c.detail}>
               {c.ok ? '✓' : '!'} {c.label}
               <span className="muted"> · {c.detail}</span>
             </li>
           ))}
-        </ul>
+        </ul>}
       </div>
     </aside>
   )

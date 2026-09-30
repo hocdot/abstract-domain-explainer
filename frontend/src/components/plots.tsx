@@ -265,28 +265,31 @@ export function SamplePlot({ box, points, name, proven }: {
       </svg>
     )
   }
+  // one number line per dimension: the interval is a segment with a bracket at
+  // each end, and each sampled value is a dot on the line
   const W = 180
-  const row = 38 // strip plus a line of numbers under it
+  const row = 34 // the line and a row of numbers under it
   const l = 22
-  const H = box.length * row + 8
+  const H = box.length * row + 4
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="sample-plot" role="img" aria-label={`${name} intervals with ${points.length} points`}>
       {box.map((b, i) => {
         const r = niceRange([b.lower, b.upper, ...points.map((p) => p[i])])
         const s = (v: number) => l + 6 + ((v - r[0]) / (r[1] - r[0])) * (W - l - 14)
-        const cy = 6 + i * row + 12
+        const cy = 4 + i * row + 10
         return (
           <g key={i}>
             <text x={2} y={cy + 4} className="axis-label">{name}<tspan className="m-txt" fontSize={10} dy={3}>{i + 1}</tspan></text>
-            <rect x={s(b.lower)} y={cy - 7} width={Math.max(s(b.upper) - s(b.lower), 1.5)} height={14} rx={3} className={boxClass} />
-            <text x={s(b.lower)} y={cy + 20} textAnchor="middle" className="axis-text lo">{fmt(b.lower)}</text>
+            <line x1={l + 2} x2={W - 4} y1={cy} y2={cy} className="axis" />
+            <line x1={s(b.lower)} x2={Math.max(s(b.upper), s(b.lower) + 1.5)} y1={cy} y2={cy}
+              className={`interval ${proven ? 'proven' : ''}`} />
+            <line x1={s(b.lower)} x2={s(b.lower)} y1={cy - 6} y2={cy + 6} className="bracket lo" />
+            <line x1={s(b.upper)} x2={s(b.upper)} y1={cy - 6} y2={cy + 6} className="bracket hi" />
+            {points.map((p, k) => <circle key={k} cx={s(p[i])} cy={cy} r={2} className="sample-dot on-line" />)}
+            <text x={s(b.lower)} y={cy + 18} textAnchor="middle" className="axis-text lo">{fmt(b.lower)}</text>
             {s(b.upper) - s(b.lower) > 14 && (
-              <text x={s(b.upper)} y={cy + 20} textAnchor="middle" className="axis-text hi">{fmt(b.upper)}</text>
+              <text x={s(b.upper)} y={cy + 18} textAnchor="middle" className="axis-text hi">{fmt(b.upper)}</text>
             )}
-            {points.map((p, k) => (
-              // spread the points up and down a little so they don't all sit on one line
-              <circle key={k} cx={s(p[i])} cy={cy + (((k * 37) % 11) - 5) * 0.9} r={1.6} className="sample-dot" />
-            ))}
           </g>
         )
       })}

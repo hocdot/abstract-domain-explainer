@@ -121,10 +121,6 @@ kbd {
 .row { display: flex; align-items: center; }
 .gap { gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .gap-sm { gap: 6px; flex-wrap: wrap; }
-.randomize { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
-.controls .randomize .small { margin: 0; }
-.controls { min-width: 0; }
-.controls .card { min-width: 0; overflow: hidden; }
 
 /* ---------- shell ---------- */
 .topbar {
@@ -159,31 +155,22 @@ kbd {
 
 .layout {
   display: grid;
-  grid-template-columns: 256px minmax(0, 1fr) 400px;
-  grid-template-areas: 'controls stage explain';
+  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-areas: 'stage explain';
   gap: 18px;
   padding: 16px 24px 32px;
-  align-items: start;
+  /* both cards share the row's height */
+  align-items: stretch;
 }
-.layout.no-controls { grid-template-columns: minmax(0, 1fr) 400px; grid-template-areas: 'stage explain'; }
-.controls { grid-area: controls; display: flex; flex-direction: column; gap: 14px; }
 .stage { grid-area: stage; }
 .explain { grid-area: explain; }
 
-@media (max-width: 1320px) {
-  .layout {
-    grid-template-columns: 264px minmax(0, 1fr);
-    grid-template-areas: 'controls stage' 'controls explain';
-  }
-}
-@media (max-width: 1320px) {
-  .layout.no-controls { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'stage' 'explain'; }
+@media (max-width: 1100px) {
+  .layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'stage' 'explain'; }
 }
 @media (max-width: 860px) {
   .topbar { padding: 14px 16px 0; }
   .layout {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: 'stage' 'explain' 'controls';
     padding: 12px 16px 24px;
   }
   .banner { margin: 12px 16px 0; }
@@ -250,67 +237,19 @@ kbd {
   font: inherit;
 }
 
-/* ---------- controls ---------- */
-.controls .card { padding: 14px 16px 16px; }
-.controls h3 {
-  margin-bottom: 10px;
-  color: var(--ink-3);
-  font: 600 11px var(--font-ui);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.controls .small { margin: 8px 0 0; }
-
-.domains { display: flex; flex-direction: column; gap: 6px; }
-.domain {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 9px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-.domain.selected { border-color: var(--accent); background: var(--accent-soft); }
-.planned-list { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
-.planned-list .small { margin: 0 2px 0 0; }
-.domain-name { font-weight: 600; font-size: 13px; }
-.domain-sum { color: var(--ink-3); font-size: 12px; line-height: 1.4; }
-.soon {
-  padding: 2px 8px;
-  border: 1px solid var(--line-2);
-  border-radius: 99px;
-  font-size: 11.5px;
-  color: var(--ink-3);
-  cursor: help;
-}
-
-.box-grid { display: grid; grid-template-columns: 32px 1fr 1fr; gap: 6px 8px; align-items: center; }
-.box-grid > .small { text-align: right; padding-right: 8px; }
-.box-row { display: contents; }
-.sym { font-family: var(--font-math); font-size: 16px; }
-.sym sub { font-family: var(--font-math-rm); }
-
-.arch { display: flex; flex-direction: column; gap: 6px; }
-.arch-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
-.size-stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.size-stepper button { width: 26px; height: 24px; border: 0; background: transparent; cursor: pointer; color: var(--ink-2); }
-.size-stepper button:hover:not(:disabled) { background: var(--surface-2); }
-.size-stepper button:disabled { opacity: 0.3; cursor: default; }
-.size-stepper span { min-width: 22px; text-align: center; font-size: 12.5px; }
-
-.matrix { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
-.matrix summary { cursor: pointer; font-size: 13px; font-weight: 500; }
-.matrix-grid { display: grid; gap: 5px; margin-top: 8px; align-items: center; }
-
 /* ---------- diagram ---------- */
 .stage { padding: 16px 18px 14px; min-width: 0; }
 .diagram-outer { position: relative; }
-.diagram-wrap { overflow: auto; max-height: 78vh; }
-.diagram { margin: 0 auto; }
-.diagram { display: block; width: 100%; height: auto; }
+/* never a vertical scrollbar; sideways, a wide diagram is dragged (see .pannable) */
+.diagram-wrap { display: flex; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.diagram-wrap::-webkit-scrollbar { display: none; }
+.diagram-wrap.pannable { cursor: grab; }
+.diagram-wrap.panning, .diagram-wrap.panning * { cursor: grabbing !important; }
+/* auto margins center the diagram when it is smaller than its area, and fall to
+   0 when it is larger, so a zoomed-in diagram still scrolls to every edge */
+.diagram { display: block; flex: none; margin: auto; width: 100%; height: auto; }
+/* fill the card's width, but never taller than most of the window */
+.diagram.fit { max-height: 74vh; }
 
 .col-title { font: 400 21px var(--font-display); fill: var(--ink); }
 .col-sub { font: 12px var(--font-ui); fill: var(--ink-3); }
@@ -325,15 +264,15 @@ kbd {
 
 .weight-chip { cursor: pointer; transition: opacity 0.2s; }
 .weight-chip rect { fill: var(--surface); stroke: var(--line-2); }
-.weight-chip text { font: 11.5px var(--font-math-rm); fill: var(--ink-2); }
+.weight-chip text { font: 13.5px var(--font-math-rm); fill: var(--ink-2); }
 .weight-chip.dim { opacity: 0.45; }
 .weight-chip.on rect, .weight-chip.hover rect { stroke: var(--ink); }
 .weight-chip.on text, .weight-chip.hover text { fill: var(--ink); font-weight: 600; }
 .weight-chip.hover { opacity: 1; }
 
-.bias-label { font: 12px var(--font-math-rm); white-space: pre; fill: var(--ink-3); cursor: pointer; }
+.bias-label { font: 13.5px var(--font-math-rm); white-space: pre; fill: var(--ink-3); cursor: pointer; }
 .eq text {
-  font-size: 12.5px;
+  font-size: 14px;
   white-space: pre;
   paint-order: stroke;
   stroke: var(--surface);
@@ -357,9 +296,10 @@ kbd {
 .prev-bound:hover { color: var(--ink-2); }
 .bias-label:hover, .bias-label.on { fill: var(--ink); font-weight: 600; }
 
-.diagram-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
-.diagram-toolbar .small { margin: 0; margin-right: auto; }
-.diagram-toolbar .toggle { margin-left: 0; }
+.diagram-foot { margin: 6px 0 10px; }
+.diagram-foot .legend { margin: 0; }
+.diagram-tools { display: flex; align-items: center; gap: 14px; }
+.diagram-tools .toggle { margin-left: 0; }
 .zoom {
   flex: none;
   display: inline-flex;
@@ -387,7 +327,7 @@ kbd {
 .sym-script { font: 12px var(--font-math-rm); fill: var(--ink-2); }
 .math .m-var { font-family: var(--font-math); }
 .math .m-txt { font-family: var(--font-math-rm); }
-.cell-val { font: 14px var(--font-math-rm); fill: var(--ink-2); }
+.cell-val { font: 16.5px var(--font-math-rm); fill: var(--ink-2); }
 .cell-val .lo { fill: var(--lo); }
 .cell-val .hi { fill: var(--hi); }
 .cell.pending .cell-val { fill: var(--ink-3); opacity: 0.6; }
@@ -488,17 +428,13 @@ kbd {
 
 /* ---------- explanation ---------- */
 .explain {
-  position: sticky;
-  top: 16px;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 32px);
 }
-@media (max-width: 1320px) { .explain { position: static; max-height: none; } }
 .explain-head { padding: 18px 22px 8px; }
 .eyebrow { color: var(--ink-3); font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; }
 .explain h2 { margin-top: 6px; font-family: var(--font-display); font-size: 27px; line-height: 1.15; }
-.explain-body { padding: 8px 22px 16px; overflow-y: auto; animation: fade 0.25s ease; }
+.explain-body { flex: 1; min-height: 0; padding: 8px 22px 16px; overflow-y: auto; animation: fade 0.25s ease; }
 .explain-body p { color: var(--ink-2); }
 .explain-body strong { color: var(--ink); font-weight: 600; }
 .explain-foot {
@@ -691,3 +627,85 @@ kbd {
 .sample-plot .sample-box.proven { fill: var(--accent-soft); fill-opacity: 0.5; stroke: var(--accent); }
 .sample-plot .guide { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 3 3; }
 .sample-plot .sample-dot { fill: var(--ink-2); opacity: 0.65; }
+.sample-plot .interval { stroke: var(--ink-3); stroke-width: 2; stroke-linecap: butt; opacity: 0.35; }
+.sample-plot .interval.proven { stroke: var(--accent); opacity: 0.7; }
+.sample-plot .bracket { stroke-width: 1.8; stroke-linecap: round; }
+.sample-plot .bracket.lo { stroke: var(--lo); }
+.sample-plot .bracket.hi { stroke: var(--hi); }
+/* on a line the dots pile up, so they are fainter: dense stretches read darker */
+.sample-plot .sample-dot.on-line { fill: var(--ink); opacity: 0.35; }
+
+/* ---------- setup bar (example, domain, random weights) ---------- */
+.setup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'row tools' 'desc desc';
+  column-gap: 16px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.setup-row { grid-area: row; }
+.setup-desc { grid-area: desc; }
+/* always the top-right corner, whatever the row to its left does */
+.setup-tools { grid-area: tools; align-self: start; }
+.setup-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 28px; }
+.setup-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.setup-line .setup-label { min-width: 58px; }
+.setup-line .select { width: auto; min-width: 210px; padding: 5px 10px; font-size: 13px; }
+.setup-line .small { margin: 0 0 0 4px; }
+.setup-label { color: var(--ink-3); font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; }
+.setup-desc { margin: 8px 0 0; }
+.seg-toggle button { color: var(--ink-2); }
+.seg-toggle button:hover:not(:disabled):not(.on) { background: var(--surface-2); color: var(--ink); }
+.seg-toggle button.on { background: var(--accent-soft); color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+.seg-toggle button.soon-seg { color: var(--ink-3); opacity: 0.6; cursor: help; font-style: italic; }
+.domain-toggle { max-width: 100%; overflow-x: auto; }
+.domain-toggle button { padding: 5px 12px; white-space: nowrap; flex: none; }
+
+/* ---------- editing the network in the diagram ---------- */
+.node-add { cursor: pointer; }
+.node-add circle { fill: var(--surface); stroke: var(--line-2); stroke-dasharray: 3 2.5; transition: stroke 0.15s; }
+.node-add line { stroke: var(--ink-3); stroke-width: 1.5; stroke-linecap: round; }
+.node-add:hover circle { stroke: var(--ink-2); stroke-dasharray: none; }
+.node-add:hover line { stroke: var(--ink); }
+.node-remove { cursor: pointer; transition: opacity 0.15s; }
+.node-remove:not(.show) { opacity: 0; pointer-events: none; }
+.node-remove circle { fill: var(--surface); stroke: var(--line-2); }
+.node-remove line { stroke: var(--ink-2); stroke-width: 1.5; stroke-linecap: round; }
+.node-remove:hover circle { stroke: var(--bad); fill: var(--bad-soft); }
+.node-remove:hover line { stroke: var(--bad); }
+/* no hover on touch screens: keep the remove buttons visible */
+@media (hover: none) { .node-remove:not(.show) { opacity: 0.8; pointer-events: auto; } }
+.bound-hit { fill: transparent; cursor: text; }
+.cell-val tspan.hovered { font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.box-popover { width: 220px; }
+.box-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.box-fields label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
+.num.invalid { border-color: var(--bad); background: var(--bad-soft); }
+.popover-error { margin-top: 6px; font-size: 11.5px; line-height: 1.35; color: var(--bad); }
+
+/* ---------- wide screens: the page is exactly one window tall ----------
+   Both cards fill the height left under the top bar. In the diagram card, the
+   diagram takes whatever the setup bar, legend and stepper leave, and "Fit"
+   scales it to that width and height; the explanation scrolls its own body. */
+@media (min-width: 1101px) {
+  .app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 560px; }
+  .topbar { padding-top: 12px; }
+  .layout { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); padding-top: 12px; padding-bottom: 16px; }
+  .stage { padding-top: 12px; padding-bottom: 10px; }
+  .stage { display: flex; flex-direction: column; min-height: 0; }
+  .stage > * { flex: none; }
+  .stage > .diagram-outer { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .diagram-outer > * { flex: none; }
+  .diagram-outer > .diagram-wrap { flex: 1; min-height: 0; max-height: none; }
+  .diagram.fit { height: 100%; max-height: none; }
+  .explain { min-height: 0; }
+
+  /* zoomed in: the diagram card grows to the diagram's height and the page
+     scrolls, while the explanation stays in view beside it */
+  .app.zoomed { height: auto; min-height: 100vh; }
+  .app.zoomed .layout { flex: none; grid-template-rows: auto; }
+  .app.zoomed .stage > .diagram-outer, .app.zoomed .diagram-outer > .diagram-wrap { flex: none; }
+  .app.zoomed .explain { align-self: start; position: sticky; top: 12px; height: calc(100vh - 24px); }
+}

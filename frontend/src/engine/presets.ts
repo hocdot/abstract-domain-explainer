@@ -9,8 +9,7 @@ export const PRESETS: Preset[] = [
   {
     key: 'three-relu-cases',
     name: 'Three ReLU cases',
-    description: 'One hidden layer where a neuron is always on, one is always off, '
-      + 'and one could be either. A good first example.',
+    description: 'One hidden layer with a neuron that is always on, one that is always off, and one that could be either.',
     network: { input_dim: 2, layers: [
       dense([[1, 1], [-1, -1], [1, -1]], [1, -0.5, 0]),
       dense([[1, 1, 1], [1, 0, -1]], [0, 0], 'none'),
@@ -20,8 +19,7 @@ export const PRESETS: Preset[] = [
   {
     key: 'deeppoly-example',
     name: 'DeepPoly paper example',
-    description: 'The 2-2-2-2 running example from Singh et al., "An Abstract Domain '
-      + 'for Certifying Neural Networks" (POPL 2019).',
+    description: 'The 2-2-2-2 running example from the DeepPoly paper (Singh et al., POPL 2019).',
     network: { input_dim: 2, layers: [
       dense([[1, 1], [1, -1]], [0, 0]),
       dense([[1, 1], [1, -1]], [0, 0]),

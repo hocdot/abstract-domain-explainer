@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from './api'
-import { Controls } from './components/Controls'
 import { ExplainPanel } from './components/ExplainPanel'
 import { NetworkDiagram } from './components/NetworkDiagram'
+import { DiagramTools, type Zoom } from './components/DiagramTools'
+import { SetupBar } from './components/SetupBar'
 import { Stepper } from './components/Stepper'
-import { resizeBox, setBias, setWeight, sizesOf } from './network'
+import { addNeuron, insertLayer, removeLayer, removeNeuron, resizeBox, setBias, setWeight, sizesOf } from './network'
 import { viewFor } from './explain'
 import type { DomainInfo, InputBox, Network, Preset } from './types'
 import { useTrace } from './useTrace'
@@ -46,7 +47,9 @@ export default function App() {
   const [index, setIndex] = useState(() => Number(new URLSearchParams(location.search).get('step') ?? 1) - 1 || 0)
   const [playing, setPlaying] = useState(false)
   const [seed, setSeed] = useState(1)
-  const [controlsOpen, setControlsOpen] = useState(true)
+  const [zoom, setZoom] = useState<Zoom>('fit')
+  const [fitScale, setFitScale] = useState(1)
+  const [showEq, setShowEq] = useState(true)
   const [sub, setSub] = useState(() => Number(new URLSearchParams(location.search).get('sub') ?? 1) - 1 || 0)
 
   const { result, error } = useTrace(domain, network, box)
@@ -140,6 +143,12 @@ export default function App() {
     if (box && net.input_dim !== box.lower.length) setBox(resizeBox(box, net.input_dim))
   }
 
+  const editShape = ({ network: net, box: b }: { network: Network; box: InputBox }) => {
+    setPresetKey(null)
+    setNetwork(net)
+    setBox(b)
+  }
+
   const randomize = (style: 'integer' | 'decimal') => {
     if (!network) return
     const next = seed + 1
@@ -157,7 +166,7 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className={`app ${zoom === 'fit' ? '' : 'zoomed'}`}>
       <header className="topbar">
         <div className="brand">
           <span className="logo" aria-hidden="true">[ ]</span>
@@ -172,9 +181,6 @@ export default function App() {
           >
             Suggest an idea
           </a>
-          <button className="btn ghost small" onClick={() => setControlsOpen(!controlsOpen)} aria-pressed={!controlsOpen}>
-            {controlsOpen ? 'Hide controls' : 'Show controls'}
-          </button>
           <button className="btn ghost small" onClick={() => setTheme(NEXT_THEME[theme])} title="Switch theme">
             Theme: {theme}
           </button>
@@ -184,26 +190,29 @@ export default function App() {
       {(bootError || error) && <div className="banner">{bootError ?? error}</div>}
 
       {network && box ? (
-        <main className={`layout ${controlsOpen ? '' : 'no-controls'}`}>
-          {controlsOpen && <Controls
-            presets={presets}
-            presetKey={presetKey}
-            onPreset={load}
-            network={network}
-            onNetwork={editNetwork}
-            box={box}
-            onBox={(b) => {
-              setPresetKey(null)
-              setBox(b)
-            }}
-            onRandomize={randomize}
-            domains={domains}
-            domain={domain}
-            onDomain={setDomain}
-          />}
+        <main className="layout">
           {trace && result ? (
             <>
               <section className="stage card">
+                <SetupBar
+                  presets={presets}
+                  presetKey={presetKey}
+                  onPreset={load}
+                  domains={domains}
+                  domain={domain}
+                  onDomain={setDomain}
+                  onRandomize={randomize}
+                  tools={
+                    <DiagramTools
+                      zoom={zoom}
+                      onZoom={setZoom}
+                      fitScale={fitScale}
+                      // only domains with linear bounds have equations to show
+                      showEq={trace.stages.some((s) => s.relax.length > 0 || (s.index > 0 && s.linear.length > 0)) ? showEq : null}
+                      onShowEq={setShowEq}
+                    />
+                  }
+                />
                 <NetworkDiagram
                   network={result.network}
                   trace={trace}
@@ -212,19 +221,33 @@ export default function App() {
                   onJump={jump}
                   onEditWeight={(k, j, i, v) => editNetwork(setWeight(network, k, j, i, v))}
                   onEditBias={(k, j, v) => editNetwork(setBias(network, k, j, v))}
+                  box={box}
+                  onEditBox={(b) => {
+                    setPresetKey(null)
+                    setBox(b)
+                  }}
+                  onAddNeuron={(c) => editShape(addNeuron(network, box, c))}
+                  onRemoveNeuron={(c, j) => editShape(removeNeuron(network, box, c, j))}
+                  onInsertLayer={(g) => editNetwork(insertLayer(network, g))}
+                  onRemoveLayer={(c) => editNetwork(removeLayer(network, c))}
+                  zoom={zoom}
+                  showEq={showEq}
+                  onFitScale={(v) => setFitScale((s) => (Math.abs(s - v) < 0.005 ? s : v))}
+                  legend={
+                    <>
+                      <span><i className="sw lo" /> lower bound</span>
+                      <span><i className="sw hi" /> upper bound</span>
+                      <span><i className="ln" /> positive weight</span>
+                      <span><i className="ln neg" /> negative weight</span>
+                      <span className="legend-group">
+                        ReLU:
+                        <span><i className="tint st-on" /> always active</span>
+                        <span><i className="tint st-off" /> always inactive</span>
+                        <span><i className="tint st-unstable" /> unstable</span>
+                      </span>
+                    </>
+                  }
                 />
-                <div className="legend">
-                  <span><i className="sw lo" /> lower bound</span>
-                  <span><i className="sw hi" /> upper bound</span>
-                  <span><i className="ln" /> positive weight</span>
-                  <span><i className="ln neg" /> negative weight</span>
-                  <span className="legend-group">
-                    ReLU:
-                    <span><i className="tint st-on" /> always active</span>
-                    <span><i className="tint st-off" /> always inactive</span>
-                    <span><i className="tint st-unstable" /> unstable</span>
-                  </span>
-                </div>
                 <Stepper
                   trace={trace}
                   index={clamped}

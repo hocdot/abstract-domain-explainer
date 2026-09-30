@@ -1,7 +1,9 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, type PointerEvent, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { fmt, textLin, textSym } from '../format'
 import { MathSpans, mlin, mtxt, mvar, mwidth, type MTok } from './SvgMath'
-import type { DiagramFocus, LinBound, Network, Stage, Trace } from '../types'
+import { MAX_HIDDEN, MAX_WIDTH } from '../network'
+import type { Zoom } from './DiagramTools'
+import type { DiagramFocus, InputBox, LinBound, Network, Stage, Trace } from '../types'
 import { NumberField } from './NumberField'
 
 const CELL_W = 100
@@ -10,12 +12,12 @@ const GAP_X = 124 // between layers (weighted edges)
 const ACT_GAP = 60 // between z and h of the same layer (one activation arrow)
 const ACT_GAP_EQ = 128 // ... wide enough to print the ReLU's two lines on the arrow
 const GAP_Y = 36 // bias label sits above each neuron, inside this gap
-const GAP_Y_EQ = 67 // ... plus two bound equations under the neuron above it
-const EXACT_H = 17 // ... plus one more line for "h = ..." under always-active/inactive ReLUs
+const GAP_Y_EQ = 72 // ... plus two bound equations under the neuron above it
+const EXACT_H = 18 // ... plus one more line for "h = ..." under always-active/inactive ReLUs
 const EQ_MAX_W = 210
-const TOP = 64 // column titles + room for the first row's bias labels
+const MAX_GAP_STRETCH = 150 // in "Fit", rows may spread apart by at most this much more
+const TOP = 70 // column titles + room for the first row's bias labels
 const PAD = 12
-const ZOOMS = [0.5, 0.67, 0.8, 1, 1.25, 1.5, 2]
 const STATUS_LABEL = {
   on: 'always active (ReLU passes it through)',
   off: 'always inactive (ReLU outputs 0)',
@@ -30,6 +32,21 @@ interface Props {
   onJump: (stage: number, neuron: number) => void
   onEditWeight: (layer: number, j: number, i: number, value: number) => void
   onEditBias: (layer: number, j: number, value: number) => void
+  box: InputBox
+  onEditBox: (box: InputBox) => void
+  /** column c: 0 = the inputs, k = dense layer k (a hidden neuron brings its ReLU) */
+  onAddNeuron: (c: number) => void
+  onRemoveNeuron: (c: number, j: number) => void
+  /** insert a hidden layer between columns g and g + 1 */
+  onInsertLayer: (g: number) => void
+  /** remove hidden layer c (its column) */
+  onRemoveLayer: (c: number) => void
+  /** shown under the diagram */
+  legend?: ReactNode
+  zoom: Zoom
+  showEq: boolean
+  /** reports the scale "Fit" shows, so the zoom buttons can continue from it */
+  onFitScale: (scale: number) => void
 }
 
 type Point = { x: number; y: number }
@@ -50,6 +67,7 @@ interface Edge {
 type Target =
   | { kind: 'weight'; layer: number; j: number; i: number; value: number }
   | { kind: 'bias'; layer: number; j: number; value: number }
+  | { kind: 'box'; i: number; side: 'lower' | 'upper' }
 
 const bezier = (a: Point, b: Point) => {
   const dx = (b.x - a.x) * 0.5
@@ -89,7 +107,7 @@ function Symbol({ stage, j, x, y }: { stage: Stage; j: number; x: number; y: num
 }
 
 /** Equation text under a neuron; squeezed if it would run into the next column. */
-const EQ_SIZE = 12.5
+const EQ_SIZE = 14
 const sameLin = (a: LinBound, b: LinBound) =>
   Math.abs(a.const - b.const) < 1e-9 && a.coeffs.every((c, i) => Math.abs(c - b.coeffs[i]) < 1e-9)
 
@@ -106,13 +124,19 @@ function Eq({ x, y, anchor, className, maxW = EQ_MAX_W, toks }: {
   )
 }
 
-export function NetworkDiagram({ network, trace, step, focus, onJump, onEditWeight, onEditBias }: Props) {
+export function NetworkDiagram({
+  network, trace, step, focus, onJump, onEditWeight, onEditBias, box, onEditBox, onAddNeuron, onRemoveNeuron,
+  onInsertLayer, onRemoveLayer, legend, zoom, showEq, onFitScale,
+}: Props) {
   const outerRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const [hover, setHover] = useState<string | null>(null)
+  // `${column}:${row}`: the neuron under the pointer, which shows its remove button
+  const [hoverNeuron, setHoverNeuron] = useState<string | null>(null)
+  // hidden layer whose column the pointer is over (anywhere, gaps included),
+  // which shows its remove button next to the title
+  const [hoverCol, setHoverCol] = useState<number | null>(null)
   const [editing, setEditing] = useState<{ target: Target; left: number; top: number } | null>(null)
-  const [zoom, setZoom] = useState<number | 'fit'>('fit')
-  const [showEq, setShowEq] = useState(true)
   const hasEq = trace.stages.some((s) => s.relax.length > 0 || (s.index > 0 && s.linear.length > 0))
   const eqOn = hasEq && showEq
 
@@ -120,6 +144,28 @@ export function NetworkDiagram({ network, trace, step, focus, onJump, onEditWeig
   const curStage = trace.stages[cur.stage]
 
   const [overflow, setOverflow] = useState(0)
+  // size of the space "Fit" fills. Only measured when the page is one window tall
+  // (same breakpoint as the wide-screen block in styles.css): below it the space
+  // has no height of its own, since it grows with the diagram.
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [area, setArea] = useState<{ w: number; h: number } | null>(null)
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const wide = window.matchMedia('(min-width: 1101px)')
+    const measure = () => {
+      const next = wide.matches && el.clientWidth > 0 ? { w: el.clientWidth, h: el.clientHeight } : null
+      setArea((a) => (a?.w === next?.w && a?.h === next?.h ? a : next))
+    }
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    wide.addEventListener('change', measure)
+    measure()
+    return () => {
+      ro.disconnect()
+      wide.removeEventListener('change', measure)
+    }
+  }, [])
   const layout = useMemo(() => {
     const columns: Stage[][] = []
     for (const s of trace.stages) (columns[s.layer] ??= []).push(s)
@@ -127,26 +173,49 @@ export function NetworkDiagram({ network, trace, step, focus, onJump, onEditWeig
     // an always-active/inactive ReLU gets a third line (h = ...), so leave room for it
     const hasExact = trace.stages.some((s) => s.kind === 'relu' && s.linear.length > 0 &&
       trace.stages[s.index - 1].bounds.some((b) => b.lower >= 0 || b.upper <= 0))
-    const gapY = eqOn ? GAP_Y_EQ + (hasExact ? EXACT_H : 0) : GAP_Y
+    const gapY0 = eqOn ? GAP_Y_EQ + (hasExact ? EXACT_H : 0) : GAP_Y
     const actGap = eqOn && trace.stages.some((s) => s.relax.length > 0) ? ACT_GAP_EQ : ACT_GAP
-    const height = TOP + maxRows * CELL_H + (maxRows - 1) * gapY + (eqOn ? 40 + (hasExact ? EXACT_H : 0) : 14)
-    const pos: Point[][] = []
-    const colX: number[] = []
-    const colW: number[] = []
-    let x = PAD
-    for (const col of columns) {
-      colX.push(x)
-      col.forEach((s, n) => {
-        if (n > 0) x += actGap
-        const offset = ((maxRows - s.size) * (CELL_H + gapY)) / 2
-        pos[s.index] = Array.from({ length: s.size }, (_, j) => ({ x, y: TOP + offset + j * (CELL_H + gapY) }))
-        x += CELL_W
+    // one "+" under each column, below its last neuron and that neuron's equations
+    const eqRoom = eqOn ? 38 + (hasExact ? EXACT_H : 0) + 6 : 0
+
+    /** Positions for a given gap between rows. Only the height depends on it. */
+    const place = (gapY: number) => {
+      const baseHeight = TOP + maxRows * CELL_H + (maxRows - 1) * gapY + (eqOn ? 40 + (hasExact ? EXACT_H : 0) : 14)
+      const pos: Point[][] = []
+      const colX: number[] = []
+      const colW: number[] = []
+      let x = PAD
+      for (const col of columns) {
+        colX.push(x)
+        col.forEach((s, n) => {
+          if (n > 0) x += actGap
+          const offset = ((maxRows - s.size) * (CELL_H + gapY)) / 2
+          pos[s.index] = Array.from({ length: s.size }, (_, j) => ({ x, y: TOP + offset + j * (CELL_H + gapY) }))
+          x += CELL_W
+        })
+        colW.push(x - colX[colX.length - 1])
+        x += GAP_X
+      }
+      const adders = columns.map((col, c) => {
+        // under the column's first cell: z for a hidden layer, not its ReLU
+        const p = pos[col[0].index][col[0].size - 1]
+        return { c, size: col[0].size, x: p.x + CELL_W / 2, y: p.y + CELL_H + (c > 0 ? eqRoom : 0) + 22 }
       })
-      colW.push(x - colX[colX.length - 1])
-      x += GAP_X
+      const height = Math.max(baseHeight, ...adders.map((a) => a.y + 12 + PAD))
+      // plus room for the output's equations, measured after render (they can be wider than the cell)
+      const width = x - GAP_X + PAD + overflow
+      return { pos, colX, colW, adders, height, width }
     }
-    // plus room for the output's equations, measured after render (they can be wider than the cell)
-    const width = x - GAP_X + PAD + overflow
+
+    // "Fit" on a wide screen: spread the rows until the diagram has the shape of
+    // the space it is shown in, so it fills the height as well as the width
+    let placed = place(gapY0)
+    if (zoom === 'fit' && area && maxRows > 1) {
+      const target = (placed.width * area.h) / area.w
+      const extra = Math.min(MAX_GAP_STRETCH, Math.max(0, (target - placed.height) / (maxRows - 1)))
+      if (extra > 1) placed = place(gapY0 + extra)
+    }
+    const { pos, colX, colW, adders, height, width } = placed
 
     // Each target neuron gets one input port per source, spread along its left
     // side. Weight labels sit just before the port, so they line up in a
@@ -166,8 +235,8 @@ export function NetworkDiagram({ network, trace, step, focus, onJump, onEditWeig
         }),
       )
     })
-    return { columns, pos, colX, colW, width, height, edges }
-  }, [trace.stages, network, eqOn, overflow])
+    return { columns, pos, colX, colW, width, height, edges, adders }
+  }, [trace.stages, network, eqOn, overflow, zoom, area])
 
   // step index at which each (stage, neuron) first gets its bounds
   const revealAt = useMemo(() => {
@@ -241,61 +310,137 @@ export function NetworkDiagram({ network, trace, step, focus, onJump, onEditWeig
     return pre.lower >= 0 ? 'on' : pre.upper <= 0 ? 'off' : 'unstable'
   }
 
-  // current effective zoom, so +/- continue from "fit"
-  const effectiveZoom = () => {
-    if (zoom !== 'fit') return zoom
+  // zooming keeps the point in the middle of the view where it was (the middle of
+  // the network, coming from "Fit"): remember it on scroll, restore it on zoom
+  const viewCenter = useRef({ x: 0.5, y: 0.5 })
+  const rememberCenter = () => {
+    const el = wrapRef.current
+    if (el) viewCenter.current = {
+      x: (el.scrollLeft + el.clientWidth / 2) / el.scrollWidth,
+      y: (el.scrollTop + el.clientHeight / 2) / el.scrollHeight,
+    }
+  }
+  useLayoutEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    if (zoom === 'fit') {
+      // "Fit" shows everything, so there is nothing to scroll: start from the top
+      el.scrollTop = 0
+      el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2
+      rememberCenter()
+      return
+    }
+    el.scrollLeft = viewCenter.current.x * el.scrollWidth - el.clientWidth / 2
+    el.scrollTop = viewCenter.current.y * el.scrollHeight - el.clientHeight / 2
+  }, [zoom])
+
+  // The diagram never scrolls vertically: zoomed in, its card grows and the page
+  // scrolls. A diagram wider than the card is dragged sideways instead of showing
+  // a scrollbar; a drag must not also count as a click on what it started on.
+  const drag = useRef<{ x: number; left: number; moved: boolean } | null>(null)
+  const [pannable, setPannable] = useState(false)
+  const [panning, setPanning] = useState(false)
+  useLayoutEffect(() => {
+    const el = wrapRef.current
+    const can = !!el && el.scrollWidth > el.clientWidth + 1
+    if (can !== pannable) setPannable(can)
+  })
+  const panStart = (e: PointerEvent) => {
+    const el = wrapRef.current
+    if (!pannable || !el || e.button !== 0) return
+    drag.current = { x: e.clientX, left: el.scrollLeft, moved: false }
+  }
+  const panMove = (e: PointerEvent) => {
+    const d = drag.current
+    const el = wrapRef.current
+    if (!d || !el) return
+    const dx = e.clientX - d.x
+    if (!d.moved && Math.abs(dx) < 4) return
+    if (!d.moved) {
+      d.moved = true
+      el.setPointerCapture(e.pointerId)
+      setPanning(true)
+    }
+    el.scrollLeft = d.left - dx
+  }
+  const panEnd = () => {
+    if (drag.current && !drag.current.moved) drag.current = null
+    setPanning(false)
+  }
+
+  useLayoutEffect(() => {
     const r = svgRef.current?.getBoundingClientRect()
-    return r ? Math.min(r.width / layout.width, r.height / layout.height) : 1
-  }
-  const stepZoom = (dir: 1 | -1) => {
-    const z = effectiveZoom()
-    const next = dir > 0 ? ZOOMS.find((v) => v > z + 0.01) : [...ZOOMS].reverse().find((v) => v < z - 0.01)
-    if (next) setZoom(next)
-  }
-  const svgStyle =
-    zoom === 'fit'
-      // fill the card's width, but never taller than most of the window; below 65%, scroll instead
-      ? { width: '100%', height: 'auto', maxHeight: '74vh' }
-      : { width: layout.width * zoom, maxWidth: 'none' }
+    if (zoom === 'fit' && r && r.width > 0) onFitScale(Math.min(r.width / layout.width, r.height / layout.height))
+  })
+  // "Fit" is sized by CSS (.diagram.fit): the whole network, as large as the space allows
+  const svgStyle = zoom === 'fit' ? undefined : { width: layout.width * zoom, maxWidth: 'none' }
 
   const t = editing?.target
   return (
     <div className="diagram-outer" ref={outerRef}>
-      <div className="diagram-toolbar">
-        <span className="muted small">Click a neuron to explain it, or a weight or bias to edit it.</span>
-        {hasEq && (
-          <label className="toggle">
-            <input type="checkbox" checked={showEq} onChange={(e) => setShowEq(e.target.checked)} />
-            <span>Show equations</span>
-          </label>
-        )}
-        <div className="zoom" role="group" aria-label="Zoom">
-          <button onClick={() => stepZoom(-1)} title="Zoom out" aria-label="Zoom out">−</button>
-          <button className="zoom-level mono" onClick={() => setZoom('fit')} title="Fit to width">
-            {zoom === 'fit' ? 'Fit' : `${Math.round(zoom * 100)}%`}
-          </button>
-          <button onClick={() => stepZoom(1)} title="Zoom in" aria-label="Zoom in">+</button>
-        </div>
-      </div>
-
-      <div className="diagram-wrap">
+      <div
+        className={`diagram-wrap ${pannable ? 'pannable' : ''} ${panning ? 'panning' : ''}`}
+        ref={wrapRef}
+        onScroll={rememberCenter}
+        onPointerDown={panStart}
+        onPointerMove={panMove}
+        onPointerUp={panEnd}
+        onPointerCancel={() => {
+          drag.current = null
+          setPanning(false)
+        }}
+        onClickCapture={(e) => {
+          if (drag.current?.moved) {
+            e.stopPropagation()
+            e.preventDefault()
+          }
+          drag.current = null
+        }}
+      >
         <svg
           ref={svgRef}
           viewBox={`0 0 ${layout.width} ${layout.height}`}
-          className="diagram"
+          className={`diagram ${zoom === 'fit' ? 'fit' : ''}`}
           style={svgStyle}
           role="img"
           aria-label="Network diagram with the bounds of every neuron"
+          onMouseMove={(e) => {
+            const m = svgRef.current?.getScreenCTM()
+            if (!m) return
+            const x = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse()).x
+            const last = layout.columns.length - 1
+            const c = layout.colX.findIndex((x0, k) => k > 0 && k < last && x >= x0 - 12 && x <= x0 + layout.colW[k] + 12)
+            setHoverCol(c >= 0 ? c : null)
+          }}
+          onMouseLeave={() => setHoverCol(null)}
         >
+          <title>Click a neuron to explain it, or a weight, bias or input bound to edit it.</title>
 
           {/* column headers: one title per layer, one label per stage */}
           {layout.columns.map((col, c) => {
             const title = c === 0 ? 'Input' : c === layout.columns.length - 1 ? 'Output' : `Layer ${c}`
+            const hidden = c > 0 && c < layout.columns.length - 1
+            const mid = layout.colX[c] + layout.colW[c] / 2
             return (
               <g key={c}>
-                <text x={layout.colX[c] + layout.colW[c] / 2} y={18} textAnchor="middle" className="col-title">{title}</text>
+                <text x={mid} y={24} textAnchor="middle" className="col-title">{title}</text>
+                {hidden && (
+                  <g
+                    className={`node-remove ${hoverCol === c ? 'show' : ''}`}
+                    transform={`translate(${mid + title.length * 5 + 14},${17})`}
+                    onClick={() => {
+                      setHoverCol(null)
+                      setEditing(null)
+                      onRemoveLayer(c)
+                    }}
+                  >
+                    <title>{`remove layer ${c}`}</title>
+                    <circle r={8} />
+                    <line x1={-3.5} x2={3.5} />
+                  </g>
+                )}
                 {col.map((s) => (
-                  <text key={s.index} x={layout.pos[s.index][0].x + CELL_W / 2} y={34} textAnchor="middle" className="col-sub">
+                  <text key={s.index} x={layout.pos[s.index][0].x + CELL_W / 2} y={40} textAnchor="middle" className="col-sub">
                     {s.kind === 'input' ? 'Input box' : s.kind === 'affine' ? 'Linear' : 'ReLU'}
                   </text>
                 ))}
@@ -330,7 +475,7 @@ export function NetworkDiagram({ network, trace, step, focus, onJump, onEditWeig
           {/* weight labels, drawn after all edges so no edge crosses a label */}
           {layout.edges.map((e) => {
             const label = fmt(e.w)
-            const w = label.length * 6.4 + 10
+            const w = label.length * 7.6 + 12
             const on = edgeActive(e)
             return (
               <g
@@ -341,8 +486,8 @@ export function NetworkDiagram({ network, trace, step, focus, onJump, onEditWeig
                 onMouseLeave={() => setHover((h) => (h === e.key ? null : h))}
                 onClick={() => editWeight(e)}
               >
-                <rect x={-w / 2} y={-8} width={w} height={16} rx={8} />
-                <text textAnchor="middle" y={3.8}>{label}</text>
+                <rect x={-w / 2} y={-9.5} width={w} height={19} rx={9.5} />
+                <text textAnchor="middle" y={4.6}>{label}</text>
               </g>
             )
           })}
@@ -409,6 +554,8 @@ export function NetworkDiagram({ network, trace, step, focus, onJump, onEditWeig
                   <g
                     className={`cell ${isActive(s.index, j) ? 'active' : ''} ${isSource(s.index, j) ? 'source' : ''} ${show ? '' : 'pending'}`}
                     onClick={() => onJump(s.index, j)}
+                    onMouseEnter={() => setHoverNeuron(`${s.layer}:${j}`)}
+                    onMouseLeave={() => setHoverNeuron((h) => (h === `${s.layer}:${j}` ? null : h))}
                   >
                     <title>{tip}</title>
                     <clipPath id={clip}>
@@ -426,19 +573,39 @@ export function NetworkDiagram({ network, trace, step, focus, onJump, onEditWeig
                     <Symbol stage={s} j={j} x={cx} y={noInterval ? y + CELL_H / 2 + 7 : y + 24} />
                     {!noInterval && <text
                       x={cx}
-                      y={y + 46}
+                      y={y + 47}
                       textAnchor="middle"
                       className="cell-val"
-                      {...(concrete && label.length > 13 ? { textLength: CELL_W - 12, lengthAdjust: 'spacingAndGlyphs' } : {})}
+                      {...(concrete && label.length * 8.3 > CELL_W - 12 ? { textLength: CELL_W - 12, lengthAdjust: 'spacingAndGlyphs' } : {})}
                     >
                       {concrete ? (
                         <>
-                          [<tspan className="lo">{fmt(b.lower)}</tspan>, <tspan className="hi">{fmt(b.upper)}</tspan>]
+                          [<tspan className={`lo ${hover === `box:${j}:lower` ? 'hovered' : ''}`}>{fmt(b.lower)}</tspan>,{' '}
+                          <tspan className={`hi ${hover === `box:${j}:upper` ? 'hovered' : ''}`}>{fmt(b.upper)}</tspan>]
                         </>
                       ) : (
                         '?'
                       )}
                     </text>}
+                    {/* the input box is edited in place: click either end of the interval */}
+                    {s.kind === 'input' && (['lower', 'upper'] as const).map((side, k) => (
+                      <rect
+                        key={side}
+                        x={x + (k * CELL_W) / 2}
+                        y={y + 31}
+                        width={CELL_W / 2}
+                        height={22}
+                        className="bound-hit"
+                        onMouseEnter={() => setHover(`box:${j}:${side}`)}
+                        onMouseLeave={() => setHover((h) => (h === `box:${j}:${side}` ? null : h))}
+                        onClick={(ev) => {
+                          ev.stopPropagation()
+                          openEditor({ kind: 'box', i: j, side }, { x: cx, y: y + 4 })
+                        }}
+                      >
+                        <title>{`${side} bound of ${textSym(s, j)} · click to edit`}</title>
+                      </rect>
+                    ))}
                   </g>
 
                   {/* z, h, y: bounds over the inputs. While its back-substitution is being
@@ -458,15 +625,15 @@ export function NetworkDiagram({ network, trace, step, focus, onJump, onEditWeig
                       <g className={`eq ${isActive(s.index, j) ? 'on' : ''} ${target ? 'walking' : ''}`}>
                         <title>{target ? `Bounds so far, written over ${textSym(over)}` : 'Linear bounds of this neuron over the inputs'}</title>
                         {/* while walking one bound, show only that one */}
-                        <Eq x={cx} y={y + CELL_H + 20} anchor="middle" className={`lo ${loDone ? 'done' : ''}`}
+                        <Eq x={cx} y={y + CELL_H + 21} anchor="middle" className={`lo ${loDone ? 'done' : ''}`}
                           toks={[mvar(s.letter, j + 1), mtxt(' ≥ '), ...mlin(lb.coeffs, lb.const, loSym)]} />
                         {!(target && focus.side === 'lower') && (
-                          <Eq x={cx} y={y + CELL_H + 36} anchor="middle" className="hi"
+                          <Eq x={cx} y={y + CELL_H + 38} anchor="middle" className="hi"
                             toks={[mvar(s.letter, j + 1), mtxt(' ≤ '), ...mlin(ub.coeffs, ub.const, sym)]} />
                         )}
                         {/* always active/inactive: the two lines coincide, so the neuron is exactly this */}
                         {(status === 'on' || status === 'off') && !(target && focus.side != null) && (
-                          <Eq x={cx} y={y + CELL_H + 36 + EXACT_H} anchor="middle" className="exact"
+                          <Eq x={cx} y={y + CELL_H + 38 + EXACT_H} anchor="middle" className="exact"
                             toks={[mtxt('(or '), mvar(s.letter, j + 1), mtxt(' = '), ...(
                               status === 'off' ? [mtxt('0')]
                               : sameLin(lb, ub) ? mlin(lb.coeffs, lb.const, sym)
@@ -485,12 +652,71 @@ export function NetworkDiagram({ network, trace, step, focus, onJump, onEditWeig
                       onClick={() => openEditor({ kind: 'bias', layer: s.layer - 1, j, value: bias }, { x: cx, y: y - 12 })}
                     >
                       <title>bias · click to edit</title>
-                      <MathSpans toks={[mvar('b'), mtxt(` = ${fmt(bias).replace('-', '−')}`)]} size={12} />
+                      <MathSpans toks={[mvar('b'), mtxt(` = ${fmt(bias).replace('-', '−')}`)]} size={13.5} />
                     </text>
                   )}
                 </g>
               )
             }),
+          )}
+
+          {/* remove a neuron: a small "−" on its top-right corner, shown on hover */}
+          {layout.columns.map((col, c) => {
+            // on the column's first cell: z for a hidden layer, not its ReLU
+            if (col[0].size <= 1) return null
+            return layout.pos[col[0].index].map((p, j) => {
+              const key = `${c}:${j}`
+              return (
+                <g
+                  key={`rm-${key}`}
+                  className={`node-remove ${hoverNeuron === key ? 'show' : ''}`}
+                  transform={`translate(${p.x + CELL_W - 4},${p.y + 4})`}
+                  onMouseEnter={() => setHoverNeuron(key)}
+                  onMouseLeave={() => setHoverNeuron((h) => (h === key ? null : h))}
+                  onClick={() => {
+                    setHoverNeuron(null)
+                    setEditing(null)
+                    onRemoveNeuron(c, j)
+                  }}
+                >
+                  <title>{`remove ${textSym(col[0], j)}${col.length > 1 ? ' and its ReLU' : ''}`}</title>
+                  <circle r={8} />
+                  <line x1={-3.5} x2={3.5} />
+                </g>
+              )
+            })
+          })}
+
+          {/* add a layer: a "+" in the header row, in the gap between two columns */}
+          {layout.columns.length - 2 < MAX_HIDDEN && layout.columns.slice(0, -1).map((_, g) => (
+            <g
+              key={`add-layer-${g}`}
+              className="node-add"
+              transform={`translate(${(layout.colX[g] + layout.colW[g] + layout.colX[g + 1]) / 2},${17})`}
+              onClick={() => {
+                setEditing(null)
+                onInsertLayer(g)
+              }}
+            >
+              <title>{`add a layer between ${g === 0 ? 'the input' : `layer ${g}`} and ${g + 1 === layout.columns.length - 1 ? 'the output' : `layer ${g + 1}`}`}</title>
+              <circle r={9} />
+              <line x1={-3.5} x2={3.5} />
+              <line y1={-3.5} y2={3.5} />
+            </g>
+          ))}
+
+          {/* add a neuron: a "+" under each column */}
+          {layout.adders.map((a) =>
+            a.size < MAX_WIDTH ? (
+              <g key={`add-${a.c}`} className="node-add" transform={`translate(${a.x},${a.y})`} onClick={() => onAddNeuron(a.c)}>
+                <title>
+                  {a.c === 0 ? 'add an input' : a.c === layout.columns.length - 1 ? 'add an output' : `add a neuron to layer ${a.c}`}
+                </title>
+                <circle r={11} />
+                <line x1={-4.5} x2={4.5} />
+                <line y1={-4.5} y2={4.5} />
+              </g>
+            ) : null,
           )}
 
           {/* back-substitution: outline the neurons the target's current expression refers to */}
@@ -508,7 +734,23 @@ export function NetworkDiagram({ network, trace, step, focus, onJump, onEditWeig
         </svg>
       </div>
 
-      {editing && t && (
+      <div className="diagram-foot">
+        <div className="legend">{legend}</div>
+      </div>
+
+      {editing && t?.kind === 'box' && (
+        <BoxEditor
+          key={`${t.i}-${t.side}`}
+          i={t.i}
+          side={t.side}
+          box={box}
+          name={textSym(trace.stages[0], t.i)}
+          onBox={onEditBox}
+          onClose={() => setEditing(null)}
+          style={{ left: editing.left, top: editing.top }}
+        />
+      )}
+      {editing && t && t.kind !== 'box' && (
         <div className="popover" style={{ left: editing.left, top: editing.top }}>
           <div className="popover-title">
             {t.kind === 'weight' ? (
@@ -533,6 +775,58 @@ export function NetworkDiagram({ network, trace, step, focus, onJump, onEditWeig
           <div className="popover-hint">Enter to close</div>
         </div>
       )}
+    </div>
+  )
+}
+
+/** Both bounds of one input. A bound is applied as soon as it is valid; while the
+ *  lower bound exceeds the upper one, the box keeps its last valid value. */
+function BoxEditor({ i, side, box, name, onBox, onClose, style }: {
+  i: number
+  side: 'lower' | 'upper'
+  box: InputBox
+  name: string
+  onBox: (b: InputBox) => void
+  onClose: () => void
+  style: CSSProperties
+}) {
+  const [draft, setDraft] = useState({ lower: box.lower[i], upper: box.upper[i] })
+  const ok = draft.lower <= draft.upper
+  const set = (which: 'lower' | 'upper', v: number) => {
+    const next = { ...draft, [which]: v }
+    setDraft(next)
+    if (next.lower <= next.upper) {
+      onBox({
+        lower: box.lower.map((x, k) => (k === i ? next.lower : x)),
+        upper: box.upper.map((x, k) => (k === i ? next.upper : x)),
+      })
+    }
+  }
+  return (
+    <div
+      className="popover box-popover"
+      style={style}
+      // close once focus leaves both fields (Enter and Escape blur the field)
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onClose()
+      }}
+    >
+      <div className="popover-title">Input bounds of {name}</div>
+      <div className="box-fields">
+        <label>
+          <span className="muted">lower</span>
+          <NumberField value={draft.lower} label={`lower bound of ${name}`} autoFocus={side === 'lower'}
+            className={`lo-field ${ok ? '' : 'invalid'}`} onChange={(v) => set('lower', v)} />
+        </label>
+        <label>
+          <span className="muted">upper</span>
+          <NumberField value={draft.upper} label={`upper bound of ${name}`} autoFocus={side === 'upper'}
+            className={`hi-field ${ok ? '' : 'invalid'}`} onChange={(v) => set('upper', v)} />
+        </label>
+      </div>
+      <div className={ok ? 'popover-hint' : 'popover-error'} role={ok ? undefined : 'alert'}>
+        {ok ? 'Enter to close' : 'The lower bound must not exceed the upper bound.'}
+      </div>
     </div>
   )
 }

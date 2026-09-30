@@ -27,7 +27,7 @@ frontend/src/
     presets.ts   example networks and the random generator
     sampling.ts  seeded PRNG and Sobol points for the sampled ranges
     index.ts     the registry and the calls the UI makes (via src/api.ts)
-  components/    diagram, stepper, controls, plots
+  components/    diagram (also where the network is edited), setup bar, stepper, plots
   explain/       one explanation view per step kind (input, output, ibp.*, deeppoly.*)
 frontend/tests/  engine tests
 ```
@@ -41,7 +41,7 @@ frontend/tests/  engine tests
 3. Add a view for each new step kind in `frontend/src/explain/<domain>.tsx` and
    register it in `frontend/src/explain/index.ts`.
 
-The diagram, stepper, and controls need no changes: they only read `stages` and `steps`.
+The diagram, stepper, and setup bar need no changes: they only read `stages` and `steps`.
 
 ## Deploying
 
