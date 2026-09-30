@@ -21,8 +21,6 @@ interface AffineDetail {
   bias: number
   terms: Term[]
   textbook: Bounds
-  center: number
-  radius: number
 }
 
 interface ReluDetail {
@@ -141,16 +139,6 @@ function AffineBody({ step, trace }: StepProps) {
         </div>
       )}
 
-      <details className="aside">
-        <summary>How the code computes it: center and radius</summary>
-        <p>
-          The implementation (<code>backend/core/interval.py</code>) stores each interval as a center <Tex>c</Tex> and a
-          radius <Tex>r</Tex>. It updates a whole layer at once: <Tex>{`c' = Wc + b`}</Tex> and{' '}
-          <Tex>{`r' = |W|\\,r`}</Tex>. For this neuron:
-        </p>
-        <Tex block>{`c = ${fmt(d.center)},\\quad r = ${fmt(d.radius)} \\;\\Rightarrow\\; [c - r,\\ c + r] = [${fmt(out.lower)},\\ ${fmt(out.upper)}]`}</Tex>
-        <p>That's the same interval as the table above, computed a different way.</p>
-      </details>
     </>
   )
 }

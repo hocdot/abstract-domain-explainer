@@ -96,7 +96,7 @@ class IBP(Domain):
         steps.append(Step(kind='output', stage=len(stages) - 1, neuron=None, detail={}))
         check = Check(
             label='Engine matches the textbook rule',
-            detail=f'center/radius vs. endpoint rule, max difference {worst:.1e}',
+            detail=f'engine vs. the endpoint rule above, max difference {worst:.1e}',
             ok=worst <= 1e-9,
         )
         return Trace(domain=self.key, stages=stages, steps=steps, checks=[check])
