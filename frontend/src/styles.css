@@ -502,6 +502,10 @@ kbd {
 .ibar-fill { fill: var(--band); stroke: var(--accent); stroke-width: 1; }
 .ibar-sampled { fill: var(--ink-2); }
 .bars .ibar { margin: 4px 0; }
+/* all outputs share one label column and one value column, so their zeros line up */
+.bars { display: grid; grid-template-columns: auto 1fr auto; column-gap: 10px; }
+.bars > div { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; }
+.bars .ibar { grid-column: 1 / -1; grid-template-columns: subgrid; }
 .compare { margin: 6px 0 10px; }
 /* bars being compared share one label column and one value column, so their scales line up */
 .compare { display: grid; grid-template-columns: auto 1fr auto; column-gap: 10px; }
