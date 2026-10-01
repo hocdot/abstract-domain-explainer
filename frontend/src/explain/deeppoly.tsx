@@ -452,9 +452,7 @@ function walkPrompt(step: Step, trace: Trace, sub: number): DiagramPrompt {
   if (phase === 'concretize') return at('interval', [pw('Interval of '), name, pw('?')])
   const st = d[side].steps[local]
   if (st.op === 'start') {
-    return stage.kind === 'relu' && side === 'lower'
-      ? at('lower', [pw('ReLU lines for '), name, pw('?')])
-      : at(side, [pw(`${side === 'lower' ? 'Lower' : 'Upper'} bound of `), name, pw('?')])
+    return at(side, [pw(`${side === 'lower' ? 'Lower' : 'Upper'} bound of `), name, pw('?')])
   }
   // the neurons this substitution rewrites and the layer they are rewritten over,
   // e.g. "Substitute h₁, h₂ in terms of z₁, z₂". Each ReLU output has lines in its

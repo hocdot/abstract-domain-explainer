@@ -55,7 +55,6 @@ interface Props {
   /** shown under the diagram */
   legend?: ReactNode
   zoom: Zoom
-  showEq: boolean
   /** reports the scale "Fit" shows, so the zoom buttons can continue from it */
   onFitScale: (scale: number) => void
 }
@@ -139,7 +138,7 @@ function Eq({ x, y, anchor, className, maxW = EQ_MAX_W, toks }: {
 
 export function NetworkDiagram({
   network, trace, step, focus, prompt, onPrompt, reveal, onJump, onEditWeight, onEditBias, box, onEditBox, onAddNeuron, onRemoveNeuron,
-  onInsertLayer, onRemoveLayer, legend, zoom, showEq, onFitScale,
+  onInsertLayer, onRemoveLayer, legend, zoom, onFitScale,
 }: Props) {
   const outerRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -151,7 +150,8 @@ export function NetworkDiagram({
   const [hoverCol, setHoverCol] = useState<number | null>(null)
   const [editing, setEditing] = useState<{ target: Target; left: number; top: number } | null>(null)
   const hasEq = trace.stages.some((s) => s.relax.length > 0 || (s.index > 0 && s.linear.length > 0))
-  const eqOn = hasEq && showEq
+  // domains with linear bounds print them under the neurons
+  const eqOn = hasEq
 
   const cur = trace.steps[Math.min(step, trace.steps.length - 1)]
   const curStage = trace.stages[cur.stage]

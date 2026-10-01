@@ -49,7 +49,6 @@ export default function App() {
   const [seed, setSeed] = useState(1)
   const [zoom, setZoom] = useState<Zoom>('fit')
   const [fitScale, setFitScale] = useState(1)
-  const [showEq, setShowEq] = useState(true)
   const [sub, setSub] = useState(() => Number(new URLSearchParams(location.search).get('sub') ?? 1) - 1 || 0)
 
   const { result, error } = useTrace(domain, network, box)
@@ -181,6 +180,14 @@ export default function App() {
         <div className="row gap-sm">
           <a
             className="btn ghost small"
+            href="https://github.com/hocdot/abstract-domain-explainer"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Source code
+          </a>
+          <a
+            className="btn ghost small"
             href="https://github.com/hocdot/abstract-domain-explainer/issues/new"
             target="_blank"
             rel="noopener noreferrer"
@@ -213,9 +220,6 @@ export default function App() {
                       zoom={zoom}
                       onZoom={setZoom}
                       fitScale={fitScale}
-                      // only domains with linear bounds have equations to show
-                      showEq={trace.stages.some((s) => s.relax.length > 0 || (s.index > 0 && s.linear.length > 0)) ? showEq : null}
-                      onShowEq={setShowEq}
                     />
                   }
                 />
@@ -240,7 +244,6 @@ export default function App() {
                   onInsertLayer={(g) => editNetwork(insertLayer(network, g))}
                   onRemoveLayer={(c) => editNetwork(removeLayer(network, c))}
                   zoom={zoom}
-                  showEq={showEq}
                   onFitScale={(v) => setFitScale((s) => (Math.abs(s - v) < 0.005 ? s : v))}
                   legend={
                     <>
