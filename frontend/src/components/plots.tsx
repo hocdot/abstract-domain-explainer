@@ -227,40 +227,69 @@ export function SamplePlot({ box, points, name, proven }: {
     const ry = niceRange([box[1].lower, box[1].upper, ...points.map((p) => p[1])])
     const sx = (v: number) => ml + ((v - rx[0]) / (rx[1] - rx[0])) * (S - ml - m)
     const sy = (v: number) => S - mb - ((v - ry[0]) / (ry[1] - ry[0])) * (S - mb - m)
-    // numbers sit right beside an axis when the box is on one side of it (like the ReLU plot),
-    // else along the plot's edge; dashed guides run from the box's corners to them
-    const baseY = box[1].lower >= 0 ? sy(0) : S - mb
-    const baseX = box[0].lower >= 0 ? sx(0) : ml
+    // numbers sit on the axes (like the ReLU plot), on the side away from the box: under the
+    // y1-axis unless the box lies below it, left of the y2-axis unless the box lies left of it;
+    // dashed guides run from the box's nearest edge to the axis. When the box crosses an axis,
+    // its numbers go just outside the box, where the axis leaves it.
+    const baseY = sy(0)
+    const baseX = sx(0)
+    const below = box[1].upper > 0 // x-numbers go under the axis
+    const left = box[0].upper > 0 // y-numbers go left of the axis
+    const edgeY = box[1].lower >= 0 ? sy(box[1].lower) : box[1].upper <= 0 ? sy(box[1].upper) : baseY
+    const edgeX = box[0].lower >= 0 ? sx(box[0].lower) : box[0].upper <= 0 ? sx(box[0].upper) : baseX
+    const crossX = box[1].lower < 0 && box[1].upper > 0 // the y1-axis runs through the box
+    const crossY = box[0].lower < 0 && box[0].upper > 0 // the y2-axis runs through the box
+    // a crossing number moves just inside the box if outside it would land on the other axis
+    const textW = (v: number) => fmt(v).length * 6.5
+    const xCross = (v: number, k: number) => {
+      const out = k === 0 ? sx(v) - 4 - textW(v) <= baseX + 2 && sx(v) - 4 >= baseX - 2
+        : sx(v) + 4 <= baseX + 2 && sx(v) + 4 + textW(v) >= baseX - 2
+      return (k === 0) !== out ? { x: sx(v) - 4, anchor: 'end' as const } : { x: sx(v) + 4, anchor: 'start' as const }
+    }
+    const yCross = (v: number, k: number) => {
+      const out = k === 0 ? sy(v) + 3 <= baseY + 2 && sy(v) + 13 >= baseY - 2 : sy(v) - 14 <= baseY + 2 && sy(v) - 4 >= baseY - 2
+      return (k === 0) !== out ? sy(v) + 13 : sy(v) - 4
+    }
     const xt = [{ v: box[0].lower, c: 'lo' }, { v: box[0].upper, c: 'hi' }]
     const yt = [{ v: box[1].lower, c: 'lo' }, { v: box[1].upper, c: 'hi' }]
-    // one 0 at the origin, when both numbers rows meet there and it has room
-    const zero = baseY === sy(0) && baseX === sx(0) &&
-      xt.every((t) => Math.abs(sx(t.v) - sx(0)) > 12) && yt.every((t) => Math.abs(sy(t.v) - sy(0)) > 10)
+    // one 0 at the origin, where both rows of numbers meet, when it has room
+    const zero = xt.every((t) => Math.abs(sx(t.v) - sx(0)) > 12) && yt.every((t) => Math.abs(sy(t.v) - sy(0)) > 10)
     return (
-      <svg viewBox={`0 0 ${S} ${S}`} className="sample-plot" role="img" aria-label={`${name} region with ${points.length} points`}>
-        <line x1={ml} x2={S - m + 6} y1={sy(0)} y2={sy(0)} className="axis" />
+      <svg viewBox={`0 0 ${S + 16} ${S}`} className="sample-plot" role="img" aria-label={`${name} region with ${points.length} points`}>
+        <line x1={ml} x2={S - m + 22} y1={sy(0)} y2={sy(0)} className="axis" />
         <line x1={sx(0)} x2={sx(0)} y1={m - 6} y2={S - mb} className="axis" />
         <rect x={sx(box[0].lower)} y={sy(box[1].upper)} width={Math.max(sx(box[0].upper) - sx(box[0].lower), 1.5)}
           height={Math.max(sy(box[1].lower) - sy(box[1].upper), 1.5)} className={boxClass} />
+        {points.map((p, k) => <circle key={k} cx={sx(p[0])} cy={sy(p[1])} r={1.9} className="sample-dot" />)}
         {xt.map((t, k) => (
           <g key={`x${k}`}>
-            {sy(box[1].lower) < baseY - 1 && <line x1={sx(t.v)} x2={sx(t.v)} y1={sy(box[1].lower)} y2={baseY} className="guide" />}
-            {(k === 0 || sx(xt[1].v) - sx(xt[0].v) > 12) && (
-              <text x={sx(t.v)} y={baseY + 13} textAnchor="middle" className={`axis-text ${t.c}`}>{fmt(t.v)}</text>
+            {Math.abs(edgeY - baseY) > 1 && <line x1={sx(t.v)} x2={sx(t.v)} y1={edgeY} y2={baseY} className="guide" />}
+            {crossX ? (
+              <text x={xCross(t.v, k).x} y={baseY + 13} textAnchor={xCross(t.v, k).anchor}
+                className={`axis-text on-plot ${t.c}`}>{fmt(t.v)}</text>
+            ) : (k === 0 || sx(xt[1].v) - sx(xt[0].v) > 12) && (
+              <text x={sx(t.v)} y={below ? baseY + 13 : baseY - 5} textAnchor="middle"
+                className={`axis-text on-plot ${t.c}`}>{fmt(t.v)}</text>
             )}
           </g>
         ))}
         {yt.map((t, k) => (
           <g key={`y${k}`}>
-            {sx(box[0].lower) > baseX + 1 && <line x1={baseX} x2={sx(box[0].lower)} y1={sy(t.v)} y2={sy(t.v)} className="guide" />}
-            {(k === 0 || sy(yt[0].v) - sy(yt[1].v) > 10) && (
-              <text x={baseX - 5} y={sy(t.v) + 4} textAnchor="end" className={`axis-text ${t.c}`}>{fmt(t.v)}</text>
+            {Math.abs(edgeX - baseX) > 1 && <line x1={baseX} x2={edgeX} y1={sy(t.v)} y2={sy(t.v)} className="guide" />}
+            {crossY ? (
+              <text x={baseX + 5} y={yCross(t.v, k)} textAnchor="start"
+                className={`axis-text on-plot ${t.c}`}>{fmt(t.v)}</text>
+            ) : (k === 0 || sy(yt[0].v) - sy(yt[1].v) > 10) && (
+              <text x={left ? baseX - 5 : baseX + 5} y={sy(t.v) + 4} textAnchor={left ? 'end' : 'start'}
+                className={`axis-text on-plot ${t.c}`}>{fmt(t.v)}</text>
             )}
           </g>
         ))}
-        {zero && <text x={sx(0) - 5} y={sy(0) + 13} textAnchor="end" className="axis-text">0</text>}
-        {points.map((p, k) => <circle key={k} cx={sx(p[0])} cy={sy(p[1])} r={1.9} className="sample-dot" />)}
-        <text x={S - m + 8} y={sy(0) + 4} className="axis-label">{name}<tspan className="m-txt" fontSize={10} dy={3}>1</tspan></text>
+        {zero && (
+          <text x={left ? sx(0) - 5 : sx(0) + 5} y={below ? sy(0) + 13 : sy(0) - 5} textAnchor={left ? 'end' : 'start'}
+            className="axis-text on-plot">0</text>
+        )}
+        <text x={S - m + 24} y={sy(0) + 4} className="axis-label">{name}<tspan className="m-txt" fontSize={10} dy={3}>1</tspan></text>
         <text x={sx(0) + 5} y={m - 10} className="axis-label">{name}<tspan className="m-txt" fontSize={10} dy={3}>2</tspan></text>
       </svg>
     )

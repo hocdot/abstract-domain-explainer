@@ -545,6 +545,7 @@ kbd {
 .axis-text { font: 11.5px var(--font-math-rm); fill: var(--ink-3); }
 .axis-text.lo { fill: var(--lo); }
 .axis-text.hi { fill: var(--hi); }
+.axis-text.on-plot { paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
 .axis-label { font: 14px var(--font-math); fill: var(--ink-3); }
 .axis-label .m-txt { font-family: var(--font-math-rm); }
 .stroke-lo { stroke: var(--lo); stroke-width: 2; }
