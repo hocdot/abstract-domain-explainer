@@ -17,20 +17,23 @@ export function run(domain: Domain, net: Network, box: InputBox): Trace {
   return trace
 }
 
-/** Stages with empty bounds: x, then z^(k) and h^(k) per dense layer.
- *  The very last stage is named y. */
+/** Stages with empty bounds: x, then z and h per dense layer, the very last stage named y.
+ *  Hidden neurons are numbered on across layers (z₁ z₂ z₃ in layer 1, z₄ … in layer 2), and
+ *  each ReLU output takes its input's number (z₄ → h₄). */
 export function stageLayout(net: Network): Stage[] {
-  const stage = (kind: Stage['kind'], layer: number, letter: string, sup: number | null, size: number): Stage => ({
-    index: stages.length, kind, layer, letter, sup, size, bounds: [], sampled: [], linear: [], relax: [],
+  const stage = (kind: Stage['kind'], layer: number, letter: string, first: number, size: number): Stage => ({
+    index: stages.length, kind, layer, letter, first, size, bounds: [], sampled: [], linear: [], relax: [],
   })
   const stages: Stage[] = []
-  stages.push(stage('input', 0, 'x', null, net.input_dim))
+  stages.push(stage('input', 0, 'x', 0, net.input_dim))
+  let first = 0
   net.layers.forEach((layer, k) => {
-    stages.push(stage('affine', k + 1, 'z', k + 1, layer.bias.length))
-    if (layer.activation === 'relu') stages.push(stage('relu', k + 1, 'h', k + 1, layer.bias.length))
+    stages.push(stage('affine', k + 1, 'z', first, layer.bias.length))
+    if (layer.activation === 'relu') stages.push(stage('relu', k + 1, 'h', first, layer.bias.length))
+    first += layer.bias.length
   })
   stages[stages.length - 1].letter = 'y'
-  stages[stages.length - 1].sup = null
+  stages[stages.length - 1].first = 0
   return stages
 }
 

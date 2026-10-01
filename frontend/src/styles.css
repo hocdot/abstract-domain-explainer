@@ -451,9 +451,9 @@ kbd {
 .check.bad { color: var(--hi); }
 .hint { font-size: 13px; }
 /* the next question, in a box where its answer will appear in the diagram */
-/* opacity only: a CSS transform would replace the group's position */
-.next-prompt { cursor: pointer; animation: prompt-in 0.3s ease-out; outline: none; }
-@keyframes prompt-in { from { opacity: 0; } to { opacity: 1; } }
+/* no fade-in: while opacity animates, Chrome draws the text in its own layer and the
+   subscripts shift by a pixel when the animation ends */
+.next-prompt { cursor: pointer; outline: none; }
 .next-prompt rect { fill: var(--hi); stroke: var(--hi); filter: drop-shadow(0 2px 4px rgba(28, 27, 25, 0.25)); }
 .next-prompt text { fill: var(--accent-ink); white-space: pre; }
 .next-prompt .m-word { font: 600 12.5px var(--font-ui); }

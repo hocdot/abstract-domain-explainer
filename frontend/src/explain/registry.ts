@@ -25,11 +25,9 @@ export interface StepView {
   prompt?: (step: Step, trace: Trace, sub: number) => DiagramPrompt | null
 }
 
-/** Prompt text: words, and a neuron (letter, layer and index, as in the cells) or a whole layer (letter and layer). */
+/** Prompt text: words, and neurons written as in their cells. */
 export const pw = (s: string) => ({ s, w: true })
-export const pneuron = (s: Stage, j: number) =>
-  ({ s: s.letter, v: true, sub: String(j + 1), sup: s.sup != null ? `(${s.sup})` : undefined })
-export const playerSym = (s: Stage) => ({ s: s.letter, v: true, sup: s.sup != null ? `(${s.sup})` : undefined })
+export const pneuron = (s: Stage, j: number) => ({ s: s.letter, v: true, sub: String(s.first + j + 1) })
 
 export const DOMAIN_NAMES: Record<string, string> = {
   ibp: 'Interval Bound Propagation (IBP)',

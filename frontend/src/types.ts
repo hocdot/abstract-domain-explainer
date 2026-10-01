@@ -28,7 +28,8 @@ export interface Stage {
   kind: 'input' | 'affine' | 'relu'
   layer: number
   letter: string
-  sup: number | null
+  /** neurons are numbered on across layers: this stage's first is number first + 1 */
+  first: number
   size: number
   bounds: Bounds[]
   /** min/max reached on sampled inputs */

@@ -1,9 +1,9 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import { fmt, texLin, texNum, texSym, textSym } from '../format'
+import { fmt, texLayer, texLin, texNum, texSym, textSym } from '../format'
 import { IntervalBar, ReluPlot, niceRange } from '../components/plots'
 import { Tex, hi, lo } from '../components/Tex'
 import type { Bounds, DiagramFocus, DiagramPrompt, Line, Side, Stage, Step, Trace } from '../types'
-import { playerSym, pneuron, pw, type StepProps, type StepView } from './registry'
+import { pneuron, pw, type StepProps, type StepView } from './registry'
 
 type Status = 'active' | 'inactive' | 'unstable'
 
@@ -21,7 +21,6 @@ interface ReluDetail { pre: Bounds; status: Status; relax: { lower: Line; upper:
 const EPS = 1e-12
 const paint = (side: Side, tex: string) => (side === 'lower' ? lo(tex) : hi(tex))
 const rel = (side: Side) => (side === 'lower' ? '\\ge' : '\\le')
-const stageSym = (s: Stage) => (s.sup != null ? `${s.letter}^{(${s.sup})}` : s.letter)
 const expr = (coeffs: number[], s: Stage, c: number) => texLin(coeffs, (i) => texSym(s, i), c)
 const lineTex = (ln: Line, z: string) => texLin([ln.slope], () => z, ln.bias)
 const wrap = (t: string) => (t.includes(' ') ? `\\left(${t}\\right)` : t)
@@ -169,7 +168,7 @@ function Backsub({ d, side, stage, j, trace, sub, onSub }: {
       relaxed = true
       const subst = sum(st.uses.map((u) => times(u.coef, lineTex(u[u.line], texSym(below, u.neuron)))), prev.const)
       return (
-        <Card key={k} {...at(k)} title={<>Relax <Tex>{stageSym(replaced)}</Tex>: replace each ReLU output by a line</>}>
+        <Card key={k} {...at(k)} title={<>Relax <Tex>{texLayer(replaced)}</Tex>: replace each ReLU output by a line</>}>
           <p>
             Each ReLU output gets one of its two lines (the ones printed on its arrow in the diagram). For the {side} bound, a
             positive coefficient takes the <span className={side === 'lower' ? 'lo' : 'hi'}>{side}</span> line and a
@@ -186,7 +185,7 @@ function Backsub({ d, side, stage, j, trace, sub, onSub }: {
     }
     const subst = sum(st.uses.map((u) => times(u.coef, expr(u.weights, below, u.bias))), prev.const)
     return (
-      <Card key={k} {...at(k)} title={<>Expand <Tex>{stageSym(replaced)}</Tex>: replace each linear neuron by its definition</>}>
+      <Card key={k} {...at(k)} title={<>Expand <Tex>{texLayer(replaced)}</Tex>: replace each linear neuron by its definition</>}>
         <p>These come straight from the weights and biases in the diagram, so this step is exact.</p>
         {st.uses.length === 0 && <p className="muted">Every coefficient is 0: nothing to replace.</p>}
         {st.uses.map((u) => (
@@ -458,7 +457,7 @@ function walkPrompt(step: Step, trace: Trace, sub: number): DiagramPrompt {
       : at(side, [pw(`${side === 'lower' ? 'Lower' : 'Upper'} bound of `), name, pw('?')])
   }
   // the neurons this substitution rewrites and the layer they are rewritten over,
-  // e.g. "Substitute h₁⁽¹⁾, h₂⁽¹⁾ in terms of z₁⁽¹⁾, z₂⁽¹⁾". Each ReLU output has lines in its
+  // e.g. "Substitute h₁, h₂ in terms of z₁, z₂". Each ReLU output has lines in its
   // own input only; a weighted sum is over the neurons its result uses (all of the layer
   // when that is only a constant)
   const layer = trace.stages[st.replaced]
@@ -471,7 +470,7 @@ function walkPrompt(step: Step, trace: Trace, sub: number): DiagramPrompt {
     : used.length ? used : Array.from({ length: below.size }, (_, i) => i))
   return at(side === 'lower' ? 'upper' : 'below', who.length
     ? [pw('Substitute '), ...who, pw(' in terms of '), ...over]
-    : [pw('Nothing to substitute in '), playerSym(layer)])
+    : [pw('Nothing to substitute in '), ...list(layer, Array.from({ length: layer.size }, (_, i) => i))])
 }
 
 // lower walk + upper walk + both bounds + concretize

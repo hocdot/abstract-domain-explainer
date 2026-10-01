@@ -13,7 +13,7 @@ const ACT_GAP = 60 // between z and h of the same layer (one activation arrow)
 const ACT_GAP_EQ = 128 // ... wide enough to print the ReLU's two lines on the arrow
 const GAP_Y = 36 // bias label sits above each neuron, inside this gap
 const GAP_Y_EQ = 77 // ... plus two bound equations under the neuron above it
-// baselines of the two bound lines under a neuron, far enough apart for z₁⁽¹⁾'s scripts
+// baselines of the two bound lines under a neuron, far enough apart that subscripts never touch the line below
 const EQ_LINE1 = 21
 const EQ_LINE2 = 42
 const EXACT_H = 21 // ... plus one more line for "h = ..." under always-active/inactive ReLUs
@@ -98,25 +98,22 @@ const pointAt = (a: Point, b: Point, t: number): Point => {
 const LETTER_EM: Record<string, number> = { x: 0.53, z: 0.465, h: 0.576, y: 0.49 }
 const scriptEm = (s: string) => [...s].reduce((w, c) => w + (c === '(' || c === ')' ? 0.389 : 0.5), 0)
 
-/** Neuron symbol like z⁽²⁾₁, with the layer and index stacked as KaTeX sets them. */
+/** Neuron symbol like z₄, set as KaTeX sets it. */
 function Symbol({ stage, j, x, y }: { stage: Stage; j: number; x: number; y: number }) {
-  const sup = stage.sup != null ? `(${stage.sup})` : ''
-  const sub = String(j + 1)
-  const lw = (LETTER_EM[stage.letter] ?? 0.55) * 21 + (sup ? 1 : 0)
-  const sw = Math.max(scriptEm(sup), scriptEm(sub)) * 12
+  const sub = String(stage.first + j + 1)
+  const lw = (LETTER_EM[stage.letter] ?? 0.55) * 21
+  const sw = scriptEm(sub) * 12
   const x0 = x - (lw + sw) / 2
   return (
     <g className="cell-sym">
       <text x={x0} y={y} className="sym-letter">{stage.letter}</text>
-      {sup && <text x={x0 + lw} y={y - 8} className="sym-script">{sup}</text>}
       <text x={x0 + lw} y={y + 4} className="sym-script">{sub}</text>
     </g>
   )
 }
 
-/** A neuron in an equation, written as in its cell: letter, layer and index. */
-const msym = (stage: Stage, i: number): MTok =>
-  ({ s: stage.letter, v: true, sub: String(i + 1), sup: stage.sup != null ? `(${stage.sup})` : undefined })
+/** A neuron in an equation, written as in its cell, e.g. z₄. */
+const msym = (stage: Stage, i: number): MTok => ({ s: stage.letter, v: true, sub: String(stage.first + i + 1) })
 
 /** Equation text under a neuron; squeezed if it would run into the next column. */
 const EQ_SIZE = 14
