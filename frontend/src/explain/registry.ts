@@ -1,5 +1,5 @@
 import type { FC, ReactNode } from 'react'
-import type { DiagramFocus, Step, Trace } from '../types'
+import type { DiagramFocus, DiagramPrompt, Stage, Step, Trace } from '../types'
 
 export interface StepProps {
   step: Step
@@ -21,7 +21,15 @@ export interface StepView {
   subSteps?: (step: Step) => number
   /** What the diagram highlights at a given sub-step. */
   focus?: (step: Step, trace: Trace, sub: number) => DiagramFocus | null
+  /** The question a sub-step answers, shown in the diagram one sub-step earlier. */
+  prompt?: (step: Step, trace: Trace, sub: number) => DiagramPrompt | null
 }
+
+/** Prompt text: words, and a neuron (letter, layer and index, as in the cells) or a whole layer (letter and layer). */
+export const pw = (s: string) => ({ s, w: true })
+export const pneuron = (s: Stage, j: number) =>
+  ({ s: s.letter, v: true, sub: String(j + 1), sup: s.sup != null ? `(${s.sup})` : undefined })
+export const playerSym = (s: Stage) => ({ s: s.letter, v: true, sup: s.sup != null ? `(${s.sup})` : undefined })
 
 export const DOMAIN_NAMES: Record<string, string> = {
   ibp: 'Interval Bound Propagation (IBP)',

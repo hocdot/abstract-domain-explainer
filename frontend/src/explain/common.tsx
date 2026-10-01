@@ -131,5 +131,9 @@ function OutputBody({ step, trace }: StepProps) {
 
 export const commonViews: Record<string, StepView> = {
   input: { title: () => 'Start with a box of inputs', Body: InputBody },
-  output: { title: () => 'Output bounds', Body: OutputBody },
+  output: {
+    title: () => 'Output bounds',
+    Body: OutputBody,
+    prompt: (step) => ({ stage: step.stage, neuron: null, slot: 'column', text: [{ s: 'Output bounds?', w: true }] }),
+  },
 }

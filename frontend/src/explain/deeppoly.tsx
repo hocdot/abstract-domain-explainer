@@ -2,8 +2,8 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { fmt, texLin, texNum, texSym, textSym } from '../format'
 import { IntervalBar, ReluPlot, niceRange } from '../components/plots'
 import { Tex, hi, lo } from '../components/Tex'
-import type { Bounds, DiagramFocus, Line, Side, Stage, Step, Trace } from '../types'
-import type { StepProps, StepView } from './registry'
+import type { Bounds, DiagramFocus, DiagramPrompt, Line, Side, Stage, Step, Trace } from '../types'
+import { playerSym, pneuron, pw, type StepProps, type StepView } from './registry'
 
 type Status = 'active' | 'inactive' | 'unstable'
 
@@ -441,6 +441,39 @@ function walkFocus(step: Step, _trace: Trace, sub: number): DiagramFocus {
   }
 }
 
+/** The question each sub-step answers. A new bound goes in its own line under the neuron;
+ *  a substitution goes in the free line under the bound it rewrites. */
+function walkPrompt(step: Step, trace: Trace, sub: number): DiagramPrompt {
+  const d = step.detail as unknown as { lower: Derivation; upper: Derivation }
+  const { side, local, phase } = walkPhase(d, sub)
+  const stage = trace.stages[step.stage]
+  const name = pneuron(stage, step.neuron!)
+  const at = (slot: DiagramPrompt['slot'], text: DiagramPrompt['text']): DiagramPrompt => ({ stage: step.stage, neuron: step.neuron, slot, text })
+  if (phase === 'bounds') return at('below', [pw('Combine both bounds')])
+  if (phase === 'concretize') return at('interval', [pw('Interval of '), name, pw('?')])
+  const st = d[side].steps[local]
+  if (st.op === 'start') {
+    return stage.kind === 'relu' && side === 'lower'
+      ? at('lower', [pw('ReLU lines for '), name, pw('?')])
+      : at(side, [pw(`${side === 'lower' ? 'Lower' : 'Upper'} bound of `), name, pw('?')])
+  }
+  // the neurons this substitution rewrites and the layer they are rewritten over,
+  // e.g. "Substitute h₁⁽¹⁾, h₂⁽¹⁾ in terms of z₁⁽¹⁾, z₂⁽¹⁾". Each ReLU output has lines in its
+  // own input only; a weighted sum is over the neurons its result uses (all of the layer
+  // when that is only a constant)
+  const layer = trace.stages[st.replaced]
+  const below = trace.stages[st.stage]
+  const list = (stage: Stage, js: number[]) => js.flatMap((j, k) => [...(k ? [pw(', ')] : []), pneuron(stage, j)])
+  const replaced = st.uses.map((u) => u.neuron)
+  const who = list(layer, replaced)
+  const used = st.coeffs.flatMap((c, i) => (Math.abs(c) > EPS ? [i] : []))
+  const over = list(below, st.op === 'relax' ? replaced
+    : used.length ? used : Array.from({ length: below.size }, (_, i) => i))
+  return at(side === 'lower' ? 'upper' : 'below', who.length
+    ? [pw('Substitute '), ...who, pw(' in terms of '), ...over]
+    : [pw('Nothing to substitute in '), playerSym(layer)])
+}
+
 // lower walk + upper walk + both bounds + concretize
 const walkLength = (step: Step) => {
   const d = step.detail as unknown as { lower: Derivation; upper: Derivation }
@@ -453,6 +486,7 @@ export const deeppolyViews: Record<string, StepView> = {
   'deeppoly.affine': {
     subSteps: walkLength,
     focus: walkFocus,
+    prompt: walkPrompt,
     title: (step, trace) => `Bounding ${textSym(trace.stages[step.stage], step.neuron!)}: substitute backward`,
     heading: (step, trace) => <>Bounding <Tex>{texSym(trace.stages[step.stage], step.neuron!)}</Tex>: substitute backward</>,
     Body: AffineBody,
@@ -460,6 +494,7 @@ export const deeppolyViews: Record<string, StepView> = {
   'deeppoly.relu': {
     subSteps: reluWalkLength,
     focus: walkFocus,
+    prompt: walkPrompt,
     title: (step, trace) => `Relaxing ${textSym(trace.stages[step.stage], step.neuron!)}: two lines for ReLU`,
     heading: (step, trace) => <>Relaxing <Tex>{texSym(trace.stages[step.stage], step.neuron!)}</Tex>: two lines for ReLU</>,
     Body: ReluBody,

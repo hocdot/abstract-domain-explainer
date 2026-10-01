@@ -2,7 +2,7 @@ import { fmt, texNum, texSym, textSym } from '../format'
 import { IntervalBar, ReluPlot, niceRange } from '../components/plots'
 import { Tex, hi, lo } from '../components/Tex'
 import type { Bounds, Stage } from '../types'
-import type { StepProps, StepView } from './registry'
+import { pneuron, pw, type StepProps, type StepView } from './registry'
 
 type Pick = 'lower' | 'upper'
 
@@ -187,11 +187,15 @@ export const ibpViews: Record<string, StepView> = {
   'ibp.affine': {
     title: (step, trace) => `Bounding ${textSym(trace.stages[step.stage], step.neuron!)}: a linear layer`,
     heading: (step, trace) => <>Bounding <Tex>{texSym(trace.stages[step.stage], step.neuron!)}</Tex>: a linear layer</>,
+    prompt: (step, trace) => ({ stage: step.stage, neuron: step.neuron, slot: 'interval',
+      text: [pw('Interval of '), pneuron(trace.stages[step.stage], step.neuron!), pw('?')] }),
     Body: AffineBody,
   },
   'ibp.relu': {
     title: (step, trace) => `Bounding ${textSym(trace.stages[step.stage], step.neuron!)}: through ReLU`,
     heading: (step, trace) => <>Bounding <Tex>{texSym(trace.stages[step.stage], step.neuron!)}</Tex>: through ReLU</>,
+    prompt: (step, trace) => ({ stage: step.stage, neuron: step.neuron, slot: 'interval',
+      text: [pw('ReLU: interval of '), pneuron(trace.stages[step.stage], step.neuron!), pw('?')] }),
     Body: ReluBody,
   },
 }

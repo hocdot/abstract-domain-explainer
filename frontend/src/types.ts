@@ -49,6 +49,17 @@ export type Side = 'lower' | 'upper'
 
 /** What the diagram should highlight while a step walks through sub-steps
  *  (e.g. one back-substitution at a time). */
+/** A question shown in the diagram where its answer is about to appear; clicking it continues. */
+export interface DiagramPrompt {
+  stage: number
+  /** null: the stage's column as a whole */
+  neuron: number | null
+  /** the neuron's interval, one of the bound lines under it, the line below those, or its column header */
+  slot: 'interval' | 'lower' | 'upper' | 'below' | 'column'
+  /** words and math: `w` marks words, `v` a variable with an optional sub- or superscript */
+  text: { s: string; v?: boolean; w?: boolean; sub?: string; sup?: string }[]
+}
+
 export interface DiagramFocus {
   /** stage the current lower/upper expressions of the target neuron are written over */
   stage: number

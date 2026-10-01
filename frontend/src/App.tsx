@@ -81,6 +81,11 @@ export default function App() {
       setSub(subCount(clamped - 1) - 1)
     }
   }
+  // the question the next press of Continue answers, shown in the diagram where its answer appears
+  const next = !trace || atEnd ? null
+    : subC < subCount(clamped) - 1 ? { i: clamped, k: subC + 1 } : { i: clamped + 1, k: 0 }
+  const nextStep = next && trace?.steps[next.i]
+  const prompt = trace && next && nextStep ? (viewFor(nextStep.kind).prompt?.(nextStep, trace, next.k) ?? null) : null
   const curStep = trace?.steps[clamped]
   const focus = trace && curStep ? (viewFor(curStep.kind).focus?.(curStep, trace, subC) ?? null) : null
 
@@ -218,6 +223,8 @@ export default function App() {
                   trace={trace}
                   step={clamped}
                   focus={focus}
+                  prompt={prompt}
+                  onPrompt={() => { setPlaying(false); forward() }}
                   onJump={jump}
                   onEditWeight={(k, j, i, v) => editNetwork(setWeight(network, k, j, i, v))}
                   onEditBias={(k, j, v) => editNetwork(setBias(network, k, j, v))}

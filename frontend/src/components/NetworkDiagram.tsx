@@ -3,7 +3,7 @@ import { fmt, textLin, textSym } from '../format'
 import { MathSpans, mlin, mtxt, mvar, mwidth, type MTok } from './SvgMath'
 import { MAX_HIDDEN, MAX_WIDTH } from '../network'
 import type { Zoom } from './DiagramTools'
-import type { DiagramFocus, InputBox, LinBound, Network, Stage, Trace } from '../types'
+import type { DiagramFocus, DiagramPrompt, InputBox, LinBound, Network, Stage, Trace } from '../types'
 import { NumberField } from './NumberField'
 
 const CELL_W = 100
@@ -12,8 +12,12 @@ const GAP_X = 124 // between layers (weighted edges)
 const ACT_GAP = 60 // between z and h of the same layer (one activation arrow)
 const ACT_GAP_EQ = 128 // ... wide enough to print the ReLU's two lines on the arrow
 const GAP_Y = 36 // bias label sits above each neuron, inside this gap
-const GAP_Y_EQ = 72 // ... plus two bound equations under the neuron above it
-const EXACT_H = 18 // ... plus one more line for "h = ..." under always-active/inactive ReLUs
+const GAP_Y_EQ = 77 // ... plus two bound equations under the neuron above it
+// baselines of the two bound lines under a neuron, far enough apart for z₁⁽¹⁾'s scripts
+const EQ_LINE1 = 21
+const EQ_LINE2 = 42
+const EXACT_H = 21 // ... plus one more line for "h = ..." under always-active/inactive ReLUs
+const PROMPT_H = 24 // ... plus one line for the next question (see `prompt`)
 const EQ_MAX_W = 210
 const MAX_GAP_STRETCH = 150 // in "Fit", rows may spread apart by at most this much more
 const TOP = 70 // column titles + room for the first row's bias labels
@@ -29,6 +33,10 @@ interface Props {
   trace: Trace
   step: number
   focus: DiagramFocus | null
+  /** the question the next step answers, placed where its answer will appear */
+  prompt: DiagramPrompt | null
+  /** clicking the prompt: the same as Continue */
+  onPrompt: () => void
   onJump: (stage: number, neuron: number) => void
   onEditWeight: (layer: number, j: number, i: number, value: number) => void
   onEditBias: (layer: number, j: number, value: number) => void
@@ -106,8 +114,13 @@ function Symbol({ stage, j, x, y }: { stage: Stage; j: number; x: number; y: num
   )
 }
 
+/** A neuron in an equation, written as in its cell: letter, layer and index. */
+const msym = (stage: Stage, i: number): MTok =>
+  ({ s: stage.letter, v: true, sub: String(i + 1), sup: stage.sup != null ? `(${stage.sup})` : undefined })
+
 /** Equation text under a neuron; squeezed if it would run into the next column. */
 const EQ_SIZE = 14
+const PROMPT_SIZE = 14.5
 const sameLin = (a: LinBound, b: LinBound) =>
   Math.abs(a.const - b.const) < 1e-9 && a.coeffs.every((c, i) => Math.abs(c - b.coeffs[i]) < 1e-9)
 
@@ -125,7 +138,7 @@ function Eq({ x, y, anchor, className, maxW = EQ_MAX_W, toks }: {
 }
 
 export function NetworkDiagram({
-  network, trace, step, focus, onJump, onEditWeight, onEditBias, box, onEditBox, onAddNeuron, onRemoveNeuron,
+  network, trace, step, focus, prompt, onPrompt, onJump, onEditWeight, onEditBias, box, onEditBox, onAddNeuron, onRemoveNeuron,
   onInsertLayer, onRemoveLayer, legend, zoom, showEq, onFitScale,
 }: Props) {
   const outerRef = useRef<HTMLDivElement>(null)
@@ -173,14 +186,14 @@ export function NetworkDiagram({
     // an always-active/inactive ReLU gets a third line (h = ...), so leave room for it
     const hasExact = trace.stages.some((s) => s.kind === 'relu' && s.linear.length > 0 &&
       trace.stages[s.index - 1].bounds.some((b) => b.lower >= 0 || b.upper <= 0))
-    const gapY0 = eqOn ? GAP_Y_EQ + (hasExact ? EXACT_H : 0) : GAP_Y
+    const gapY0 = (eqOn ? GAP_Y_EQ + (hasExact ? EXACT_H : 0) : GAP_Y) + PROMPT_H
     const actGap = eqOn && trace.stages.some((s) => s.relax.length > 0) ? ACT_GAP_EQ : ACT_GAP
     // one "+" under each column, below its last neuron and that neuron's equations
-    const eqRoom = eqOn ? 38 + (hasExact ? EXACT_H : 0) + 6 : 0
+    const eqRoom = (eqOn ? EQ_LINE2 + (hasExact ? EXACT_H : 0) + 6 : 0) + PROMPT_H
 
     /** Positions for a given gap between rows. Only the height depends on it. */
     const place = (gapY: number) => {
-      const baseHeight = TOP + maxRows * CELL_H + (maxRows - 1) * gapY + (eqOn ? 40 + (hasExact ? EXACT_H : 0) : 14)
+      const baseHeight = TOP + maxRows * CELL_H + (maxRows - 1) * gapY + (eqOn ? EQ_LINE2 + 2 + (hasExact ? EXACT_H : 0) : 14) + PROMPT_H
       const pos: Point[][] = []
       const colX: number[] = []
       const colW: number[] = []
@@ -516,9 +529,9 @@ export function NetworkDiagram({
                     <g className={`eq ${on ? 'on' : ''}`}>
                       <title>DeepPoly's two lines for this ReLU, in terms of its input z</title>
                       <Eq x={mid} y={y0 - 15} anchor="middle" maxW={eqW} className={`hi ${lineUsed(s.index, j, 'upper') ? 'used' : focus ? 'unused' : ''}`}
-                        toks={[mvar('h', j + 1), mtxt(' ≤ '), ...mlin([relax.upper.slope], relax.upper.bias, () => mvar('z', j + 1))]} />
+                        toks={[msym(s, j), mtxt(' ≤ '), ...mlin([relax.upper.slope], relax.upper.bias, () => msym(trace.stages[s.index - 1], j))]} />
                       <Eq x={mid} y={y0 + 24} anchor="middle" maxW={eqW} className={`lo ${lineUsed(s.index, j, 'lower') ? 'used' : focus ? 'unused' : ''}`}
-                        toks={[mvar('h', j + 1), mtxt(' ≥ '), ...mlin([relax.lower.slope], relax.lower.bias, () => mvar('z', j + 1))]} />
+                        toks={[msym(s, j), mtxt(' ≥ '), ...mlin([relax.lower.slope], relax.lower.bias, () => msym(trace.stages[s.index - 1], j))]} />
                     </g>
                   )}
                 </g>
@@ -549,11 +562,13 @@ export function NetworkDiagram({
                 'click to explain',
               ].join('\n')
               const cx = x + CELL_W / 2
+              // the next question asks for this interval: the "?" is what Continue fills in
+              const asking = prompt?.slot === 'interval' && prompt.stage === s.index && prompt.neuron === j
               return (
                 <g key={`${s.index}-${j}`}>
                   <g
-                    className={`cell ${isActive(s.index, j) ? 'active' : ''} ${isSource(s.index, j) ? 'source' : ''} ${show ? '' : 'pending'}`}
-                    onClick={() => onJump(s.index, j)}
+                    className={`cell ${isActive(s.index, j) ? 'active' : ''} ${isSource(s.index, j) ? 'source' : ''} ${show ? '' : 'pending'} ${asking ? 'asking' : ''}`}
+                    onClick={() => (asking ? onPrompt() : onJump(s.index, j))}
                     onMouseEnter={() => setHoverNeuron(`${s.layer}:${j}`)}
                     onMouseLeave={() => setHoverNeuron((h) => (h === `${s.layer}:${j}` ? null : h))}
                   >
@@ -570,6 +585,7 @@ export function NetworkDiagram({
                     )}
                     <rect x={x} y={y} width={CELL_W} height={CELL_H} clipPath={`url(#${clip})`} className="cell-bg" />
                     <rect x={x} y={y} width={CELL_W} height={CELL_H} rx={14} className="pill-border" />
+                    {asking && <rect x={x - 4} y={y - 4} width={CELL_W + 8} height={CELL_H + 8} rx={17} className="ask-ring" />}
                     <Symbol stage={s} j={j} x={cx} y={noInterval ? y + CELL_H / 2 + 7 : y + 24} />
                     {!noInterval && <text
                       x={cx}
@@ -614,30 +630,29 @@ export function NetworkDiagram({
                   {eqOn && s.kind !== 'input' && lin && show && (() => {
                     const target = isTarget(s.index, j) && focus
                     const over = target ? trace.stages[focus.stage] : trace.stages[0]
-                    // letter + index only: the outlined cells show which layer is meant
-                    const sym = (i: number) => mvar(over.letter, i + 1)
+                    const sym = (i: number) => msym(over, i)
                     // during the upper walk the finished lower bound stays, greyed, over the inputs
                     const loDone = !!target && focus.side === 'upper'
-                    const loSym = loDone ? (i: number) => mvar(trace.stages[0].letter, i + 1) : sym
+                    const loSym = loDone ? (i: number) => msym(trace.stages[0], i) : sym
                     const lb = target ? focus.lower : lin.lower
                     const ub = target ? focus.upper : lin.upper
                     return (
                       <g className={`eq ${isActive(s.index, j) ? 'on' : ''} ${target ? 'walking' : ''}`}>
                         <title>{target ? `Bounds so far, written over ${textSym(over)}` : 'Linear bounds of this neuron over the inputs'}</title>
                         {/* while walking one bound, show only that one */}
-                        <Eq x={cx} y={y + CELL_H + 21} anchor="middle" className={`lo ${loDone ? 'done' : ''}`}
-                          toks={[mvar(s.letter, j + 1), mtxt(' ≥ '), ...mlin(lb.coeffs, lb.const, loSym)]} />
+                        <Eq x={cx} y={y + CELL_H + EQ_LINE1} anchor="middle" className={`lo ${loDone ? 'done' : ''}`}
+                          toks={[msym(s, j), mtxt(' ≥ '), ...mlin(lb.coeffs, lb.const, loSym)]} />
                         {!(target && focus.side === 'lower') && (
-                          <Eq x={cx} y={y + CELL_H + 38} anchor="middle" className="hi"
-                            toks={[mvar(s.letter, j + 1), mtxt(' ≤ '), ...mlin(ub.coeffs, ub.const, sym)]} />
+                          <Eq x={cx} y={y + CELL_H + EQ_LINE2} anchor="middle" className="hi"
+                            toks={[msym(s, j), mtxt(' ≤ '), ...mlin(ub.coeffs, ub.const, sym)]} />
                         )}
                         {/* always active/inactive: the two lines coincide, so the neuron is exactly this */}
                         {(status === 'on' || status === 'off') && !(target && focus.side != null) && (
-                          <Eq x={cx} y={y + CELL_H + 38 + EXACT_H} anchor="middle" className="exact"
-                            toks={[mtxt('(or '), mvar(s.letter, j + 1), mtxt(' = '), ...(
+                          <Eq x={cx} y={y + CELL_H + EQ_LINE2 + EXACT_H} anchor="middle" className="exact"
+                            toks={[mtxt('(or '), msym(s, j), mtxt(' = '), ...(
                               status === 'off' ? [mtxt('0')]
                               : sameLin(lb, ub) ? mlin(lb.coeffs, lb.const, sym)
-                              : [mvar(trace.stages[s.index - 1].letter, j + 1)]), mtxt(')')]} />
+                              : [msym(trace.stages[s.index - 1], j)]), mtxt(')')]} />
                         )}
                       </g>
                     )
@@ -731,6 +746,21 @@ export function NetworkDiagram({
               </g>
             ) : null,
           )}
+          {prompt && (() => {
+            // a whole column's question goes under its last neuron
+            const col = layout.pos[prompt.stage]
+            const p = col?.[prompt.neuron ?? col.length - 1]
+            if (!p) return null
+            // box centres: both bound lines while neither is shown, under the lower bound line,
+            // under both (the line reserved by PROMPT_H), or just under the neuron without equations
+            const y = prompt.slot === 'lower' ? p.y + CELL_H + 27
+              : prompt.slot === 'upper' ? p.y + CELL_H + EQ_LINE2 + 4
+              : eqOn ? p.y + CELL_H + EQ_LINE2 + 21 : p.y + CELL_H + 17
+            return (
+              <PromptBox key={`${prompt.stage}-${prompt.neuron}-${prompt.slot}-${JSON.stringify(prompt.text)}`}
+                prompt={prompt} x={p.x + CELL_W / 2} y={y} onClick={onPrompt} />
+            )
+          })()}
         </svg>
       </div>
 
@@ -776,6 +806,38 @@ export function NetworkDiagram({
         </div>
       )}
     </div>
+  )
+}
+
+/** The next question in a box, clickable like Continue. The box is sized to the text as rendered. */
+function PromptBox({ prompt, x, y, onClick }: { prompt: DiagramPrompt; x: number; y: number; onClick: () => void }) {
+  const textRef = useRef<SVGTextElement>(null)
+  const [textW, setTextW] = useState(() =>
+    prompt.text.reduce((n, t) => n + (t.w ? t.s.length * 6.9 : mwidth([t], PROMPT_SIZE)), 0))
+  useLayoutEffect(() => {
+    const w = textRef.current?.getComputedTextLength()
+    if (w && Math.abs(w - textW) > 0.5) setTextW(w)
+  })
+  const w = textW + 24
+  return (
+    <g
+      className="next-prompt"
+      transform={`translate(${x},${y})`}
+      role="button"
+      tabIndex={0}
+      aria-label={`${prompt.text.map((t) => t.s + (t.sup ?? '') + (t.sub ?? '')).join('')} (continue)`}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+    >
+      <title>Click to find out (same as Continue)</title>
+      <rect x={-w / 2} y={-11.5} width={w} height={23} rx={11.5} />
+      <text ref={textRef} x={-textW / 2} y={4.6}><MathSpans toks={prompt.text} size={PROMPT_SIZE} /></text>
+    </g>
   )
 }
 
