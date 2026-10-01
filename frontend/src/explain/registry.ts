@@ -1,5 +1,5 @@
 import type { FC, ReactNode } from 'react'
-import type { DiagramFocus, DiagramPrompt, Stage, Step, Trace } from '../types'
+import type { DiagramFocus, DiagramPrompt, DiagramReveal, Stage, Step, Trace } from '../types'
 
 export interface StepProps {
   step: Step
@@ -21,6 +21,8 @@ export interface StepView {
   subSteps?: (step: Step) => number
   /** What the diagram highlights at a given sub-step. */
   focus?: (step: Step, trace: Trace, sub: number) => DiagramFocus | null
+  /** How much of the neuron the diagram shows at a given sub-step. */
+  reveal?: (step: Step, trace: Trace, sub: number) => DiagramReveal | null
   /** The question a sub-step answers, shown in the diagram one sub-step earlier. */
   prompt?: (step: Step, trace: Trace, sub: number) => DiagramPrompt | null
 }

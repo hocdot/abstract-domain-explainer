@@ -88,6 +88,7 @@ export default function App() {
   const prompt = trace && next && nextStep ? (viewFor(nextStep.kind).prompt?.(nextStep, trace, next.k) ?? null) : null
   const curStep = trace?.steps[clamped]
   const focus = trace && curStep ? (viewFor(curStep.kind).focus?.(curStep, trace, subC) ?? null) : null
+  const reveal = trace && curStep ? (viewFor(curStep.kind).reveal?.(curStep, trace, subC) ?? null) : null
 
   const load = useCallback((p: Preset) => {
     setPresetKey(p.key)
@@ -224,6 +225,7 @@ export default function App() {
                   step={clamped}
                   focus={focus}
                   prompt={prompt}
+                  reveal={reveal}
                   onPrompt={() => { setPlaying(false); forward() }}
                   onJump={jump}
                   onEditWeight={(k, j, i, v) => editNetwork(setWeight(network, k, j, i, v))}

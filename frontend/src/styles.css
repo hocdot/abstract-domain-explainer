@@ -463,6 +463,7 @@ kbd {
 .ask-ring { fill: none; stroke: var(--hi); stroke-width: 1.3; stroke-dasharray: 4 3; pointer-events: none; }
 .cell.asking { cursor: pointer; }
 .cell.asking .cell-val { fill: var(--hi); font-weight: 600; }
+.cell-val .ask { fill: var(--hi); font-weight: 600; }
 @keyframes fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .explain-body { animation: none; } * { transition: none !important; } }
 

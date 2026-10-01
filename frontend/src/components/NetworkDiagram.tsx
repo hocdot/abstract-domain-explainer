@@ -3,7 +3,7 @@ import { fmt, textLin, textSym } from '../format'
 import { MathSpans, mlin, mtxt, mvar, mwidth, type MTok } from './SvgMath'
 import { MAX_HIDDEN, MAX_WIDTH } from '../network'
 import type { Zoom } from './DiagramTools'
-import type { DiagramFocus, DiagramPrompt, InputBox, LinBound, Network, Stage, Trace } from '../types'
+import type { DiagramFocus, DiagramPrompt, DiagramReveal, InputBox, LinBound, Network, Stage, Trace } from '../types'
 import { NumberField } from './NumberField'
 
 const CELL_W = 100
@@ -17,6 +17,7 @@ const GAP_Y_EQ = 77 // ... plus two bound equations under the neuron above it
 const EQ_LINE1 = 21
 const EQ_LINE2 = 42
 const EXACT_H = 21 // ... plus one more line for "h = ..." under always-active/inactive ReLUs
+const DEF_H = 22 // without bound lines: one line for the equation of the neuron being worked out
 const PROMPT_H = 24 // ... plus one line for the next question (see `prompt`)
 const EQ_MAX_W = 210
 const MAX_GAP_STRETCH = 150 // in "Fit", rows may spread apart by at most this much more
@@ -37,6 +38,8 @@ interface Props {
   prompt: DiagramPrompt | null
   /** clicking the prompt: the same as Continue */
   onPrompt: () => void
+  /** a neuron worked out in parts (IBP): its equation under it, its bounds one at a time */
+  reveal: DiagramReveal | null
   onJump: (stage: number, neuron: number) => void
   onEditWeight: (layer: number, j: number, i: number, value: number) => void
   onEditBias: (layer: number, j: number, value: number) => void
@@ -135,7 +138,7 @@ function Eq({ x, y, anchor, className, maxW = EQ_MAX_W, toks }: {
 }
 
 export function NetworkDiagram({
-  network, trace, step, focus, prompt, onPrompt, onJump, onEditWeight, onEditBias, box, onEditBox, onAddNeuron, onRemoveNeuron,
+  network, trace, step, focus, prompt, onPrompt, reveal, onJump, onEditWeight, onEditBias, box, onEditBox, onAddNeuron, onRemoveNeuron,
   onInsertLayer, onRemoveLayer, legend, zoom, showEq, onFitScale,
 }: Props) {
   const outerRef = useRef<HTMLDivElement>(null)
@@ -183,14 +186,14 @@ export function NetworkDiagram({
     // an always-active/inactive ReLU gets a third line (h = ...), so leave room for it
     const hasExact = trace.stages.some((s) => s.kind === 'relu' && s.linear.length > 0 &&
       trace.stages[s.index - 1].bounds.some((b) => b.lower >= 0 || b.upper <= 0))
-    const gapY0 = (eqOn ? GAP_Y_EQ + (hasExact ? EXACT_H : 0) : GAP_Y) + PROMPT_H
+    const gapY0 = (eqOn ? GAP_Y_EQ + (hasExact ? EXACT_H : 0) : GAP_Y + DEF_H) + PROMPT_H
     const actGap = eqOn && trace.stages.some((s) => s.relax.length > 0) ? ACT_GAP_EQ : ACT_GAP
     // one "+" under each column, below its last neuron and that neuron's equations
-    const eqRoom = (eqOn ? EQ_LINE2 + (hasExact ? EXACT_H : 0) + 6 : 0) + PROMPT_H
+    const eqRoom = (eqOn ? EQ_LINE2 + (hasExact ? EXACT_H : 0) + 6 : DEF_H) + PROMPT_H
 
     /** Positions for a given gap between rows. Only the height depends on it. */
     const place = (gapY: number) => {
-      const baseHeight = TOP + maxRows * CELL_H + (maxRows - 1) * gapY + (eqOn ? EQ_LINE2 + 2 + (hasExact ? EXACT_H : 0) : 14) + PROMPT_H
+      const baseHeight = TOP + maxRows * CELL_H + (maxRows - 1) * gapY + (eqOn ? EQ_LINE2 + 2 + (hasExact ? EXACT_H : 0) : 14 + DEF_H) + PROMPT_H
       const pos: Point[][] = []
       const colX: number[] = []
       const colW: number[] = []
@@ -543,7 +546,8 @@ export function NetworkDiagram({
               const b = s.bounds[j]
               const show = revealed(s.index, j)
               // the node being walked is concretized only at the final step
-              const concrete = show && !(isTarget(s.index, j) && focus && !focus.concrete)
+              const part = reveal && reveal.stage === s.index && reveal.neuron === j ? reveal.bounds : 'both'
+              const concrete = show && part === 'both' && !(isTarget(s.index, j) && focus && !focus.concrete)
               // a ReLU output under DeepPoly (it has a relaxation) never needs an interval
               const noInterval = s.relax.length > 0
               const label = `[${fmt(b.lower)}, ${fmt(b.upper)}]`
@@ -596,6 +600,8 @@ export function NetworkDiagram({
                           [<tspan className={`lo ${hover === `box:${j}:lower` ? 'hovered' : ''}`}>{fmt(b.lower)}</tspan>,{' '}
                           <tspan className={`hi ${hover === `box:${j}:upper` ? 'hovered' : ''}`}>{fmt(b.upper)}</tspan>]
                         </>
+                      ) : show && part === 'lower' ? (
+                        <>[<tspan className="lo">{fmt(b.lower)}</tspan>, <tspan className="ask">?</tspan>]</>
                       ) : (
                         '?'
                       )}
@@ -654,6 +660,17 @@ export function NetworkDiagram({
                       </g>
                     )
                   })()}
+
+                  {/* each neuron's equation, e.g. z₁ = x₁ + x₂ + 1, from its step on; bold while worked on */}
+                  {!eqOn && s.kind !== 'input' && show && (
+                    <g className={`eq def ${isActive(s.index, j) ? 'on' : ''}`}>
+                      <Eq x={cx} y={y + CELL_H + 20} anchor="middle" className="exact"
+                        toks={s.kind === 'relu'
+                          ? [msym(s, j), mtxt(' = ReLU('), msym(trace.stages[s.index - 1], j), mtxt(')')]
+                          : [msym(s, j), mtxt(' = '), ...mlin(network.layers[s.layer - 1].weight[j], network.layers[s.layer - 1].bias[j],
+                              (i) => msym(trace.stages[s.index - 1], i))]} />
+                    </g>
+                  )}
 
                   {bias != null && (
                     <text
@@ -750,9 +767,11 @@ export function NetworkDiagram({
             if (!p) return null
             // box centres: both bound lines while neither is shown, under the lower bound line,
             // under both (the line reserved by PROMPT_H), or just under the neuron without equations
+            // without bound lines: the equation's line, or the line under it
             const y = prompt.slot === 'lower' ? p.y + CELL_H + 27
               : prompt.slot === 'upper' ? p.y + CELL_H + EQ_LINE2 + 4
-              : eqOn ? p.y + CELL_H + EQ_LINE2 + 21 : p.y + CELL_H + 17
+              : prompt.slot === 'def' ? p.y + CELL_H + 15
+              : eqOn ? p.y + CELL_H + EQ_LINE2 + 21 : p.y + CELL_H + DEF_H + 20
             return (
               <PromptBox key={`${prompt.stage}-${prompt.neuron}-${prompt.slot}-${JSON.stringify(prompt.text)}`}
                 prompt={prompt} x={p.x + CELL_W / 2} y={y} onClick={onPrompt} />

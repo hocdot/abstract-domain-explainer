@@ -50,13 +50,21 @@ export type Side = 'lower' | 'upper'
 
 /** What the diagram should highlight while a step walks through sub-steps
  *  (e.g. one back-substitution at a time). */
+/** How much of one neuron a step has worked out so far: its equation (always), then its
+ *  lower bound, then both. The diagram shows the equation under the neuron while it is worked on. */
+export interface DiagramReveal {
+  stage: number
+  neuron: number
+  bounds: 'none' | 'lower' | 'both'
+}
+
 /** A question shown in the diagram where its answer is about to appear; clicking it continues. */
 export interface DiagramPrompt {
   stage: number
   /** null: the stage's column as a whole */
   neuron: number | null
   /** the neuron's interval, one of the bound lines under it, the line below those, or its column header */
-  slot: 'interval' | 'lower' | 'upper' | 'below' | 'column'
+  slot: 'interval' | 'lower' | 'upper' | 'below' | 'column' | 'def'
   /** words and math: `w` marks words, `v` a variable with an optional sub- or superscript */
   text: { s: string; v?: boolean; w?: boolean; sub?: string; sup?: string }[]
 }
