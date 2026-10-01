@@ -241,7 +241,8 @@ function Finish({ lower, upper, stage, j, trace, phase, onSelect, concretize = t
           just a constant). They hold for every input in the box:
         </p>
         <Tex block>{`${final('lower', lower)} \\qquad ${final('upper', upper)}`}</Tex>
-        {children}
+        {/* the interval only exists once the box is plugged in, below */}
+        {!concretize && children}
       </Card>
       {concretize && <Card n="✓" state={phase === 'concretize' ? 'current' : 'next'} onSelect={() => onSelect(1)}
         title="Concretize: plug the box into both bounds">
