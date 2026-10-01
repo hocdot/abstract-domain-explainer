@@ -9,14 +9,19 @@ function InputBody({ step, trace }: StepProps) {
   const y = trace.stages[trace.stages.length - 1]
   const samples = (step.detail as { samples?: { inputs: number[][]; outputs: number[][] } }).samples
   const domain = DOMAIN_NAMES[trace.domain] ?? trace.domain
+  // a property the bounds settle, e.g. y1 ∈ [1, 4] proves y1 < 5: the next whole number above the bound
+  const out = y.bounds[0]
+  const y1 = texSym(y, 0)
+  const limit = Math.floor(out.upper) + 1
   const ranges = (s: typeof x) => s.bounds.map((b, i) => (
     <li key={i}><Tex>{`${texSym(s, i)} \\in [${fmt(b.lower)},\\ ${fmt(b.upper)}]`}</Tex></li>
   ))
   return (
     <>
       <p>
-        The input to the network is not a single point but a box in which each input may take any value within its own
-        interval. We want to know what the network can output for any input in that box.
+        In neural network verification, the input is <strong>not</strong> a single data point, but rather a <strong>box</strong>—a continuous space
+        where each variable can take any value within its own interval. Our goal is to determine every possible output
+        the network could produce for any point inside that box.
       </p>
       {samples ? (
         <>
@@ -43,30 +48,35 @@ function InputBody({ step, trace }: StepProps) {
       )}
       <h3>Abstract domains</h3>
       <p>
-        Computing the exact set of outputs the network can produce on the box is intractable in general, so an abstract
-        domain replaces it with a simpler description.
-        Here we use one interval per output, that is guaranteed to contain
-        every possible output. A description with this guarantee is called <strong>sound</strong>, which means it may be
-        larger than necessary but never misses an output. Testing sample inputs cannot give this guarantee because the
-        most extreme output may come from an input that was never tried.
+        Because an input box contains an <strong>infinite</strong> number of points, finding a network's exact outputs is computationally
+        impossible. Instead, an abstract domain replaces it with a simpler description. By using a single interval for
+        each output, we create an <strong>overapproximation</strong> that is guaranteed to contain every possible result.
+        This boundary might be larger than necessary, but it never misses an output.
+        For example, {samples ? "the outputs above show" : "the analysis on this page gives"} <Tex>{`${y1} \\in [${fmt(out.lower)},\\ ${fmt(out.upper)}]`}</Tex>, which is
+        enough to prove that <Tex>{`${y1} < ${fmt(limit)}`}</Tex> for every input in the box. Testing sample inputs cannot provide
+        this guarantee, because it only checks finitely many points and an untested input might produce a value that
+        falls completely outside the range of your test results.
       </p>
       <p>
-        The domain starts from the input box and pushes its description through each operation of the network in turn,
-        using a rule for every operation that keeps the description sound. Domains trade precision for cost, since a
-        domain that remembers how neurons depend on one another gives tighter bounds but does more work.
+        To calculate these bounds, the abstract domain <strong>propagates</strong> the input box through each layer of
+        the network. Every layer uses a rule that guarantees the <strong>overapproximation</strong> is maintained and no
+        possible values are dropped. Different domains trade precision for computational cost. For instance, a domain
+        that tracks exactly how neurons depend on one another yields tighter bounds, but it requires much more work to
+        compute.
       </p>
       <p>
         {trace.domain === 'ibp' ? (
-          <>{domain} describes every neuron by an interval alone and computes the intervals of each layer from those of
-          the previous layer, ignoring how those neurons relate to one another.</>
+          <>{domain} represents each neuron using only a simple interval. It computes the bounds for each new layer based
+          entirely on the intervals from the previous layer, completely ignoring the underlying dependencies between
+          neurons.</>
         ) : trace.domain === 'deeppoly' ? (
-          <>{domain} describes every neuron by a linear lower bound and a linear upper bound in terms of the neurons
-          before it. Following these bounds back to the inputs keeps track of how neurons depend on the same inputs and
-          makes the intervals tighter.</>
+          <>{domain} describes each neuron with linear lower and upper bounds defined by the preceding neurons. Tracing
+          these bounds back to the inputs preserves the underlying dependencies between neurons. While it still
+          propagates through the network layer by layer, preserving these mathematical relationships yields much tighter
+          intervals.</>
         ) : (
           <>This page uses {domain}.</>
-        )}{' '}
-        The steps that follow apply the domain one neuron at a time from the first layer to the output.
+        )}
       </p>
       <p className="hint small muted">Use <kbd>→</kbd> or <em>Next</em> to proceed.</p>
     </>
