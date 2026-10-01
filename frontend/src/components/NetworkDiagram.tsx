@@ -515,6 +515,8 @@ export function NetworkDiagram({
               const mid = (x0 + p.x) / 2
               const relax = s.relax[j]
               const eqW = p.x - x0 - 10
+              // while this neuron's walks are under way, only the lines they have reached
+              const shown = reveal && reveal.stage === s.index && reveal.neuron === j ? (reveal.lines ?? 'both') : 'both'
               return (
                 <g key={`act-${s.index}-${j}`} className={`act ${on ? 'on' : ''}`}>
                   <g className={focusing && !on ? 'dim' : ''}>
@@ -528,10 +530,10 @@ export function NetworkDiagram({
                   {eqOn && relax && revealed(s.index, j) && (
                     <g className={`eq ${on ? 'on' : ''}`}>
                       <title>DeepPoly's two lines for this ReLU, in terms of its input z</title>
-                      <Eq x={mid} y={y0 - 15} anchor="middle" maxW={eqW} className={`hi ${lineUsed(s.index, j, 'upper') ? 'used' : focus ? 'unused' : ''}`}
-                        toks={[msym(s, j), mtxt(' ≤ '), ...mlin([relax.upper.slope], relax.upper.bias, () => msym(trace.stages[s.index - 1], j))]} />
-                      <Eq x={mid} y={y0 + 24} anchor="middle" maxW={eqW} className={`lo ${lineUsed(s.index, j, 'lower') ? 'used' : focus ? 'unused' : ''}`}
-                        toks={[msym(s, j), mtxt(' ≥ '), ...mlin([relax.lower.slope], relax.lower.bias, () => msym(trace.stages[s.index - 1], j))]} />
+                      {shown === 'both' && <Eq x={mid} y={y0 - 15} anchor="middle" maxW={eqW} className={`hi ${lineUsed(s.index, j, 'upper') ? 'used' : focus ? 'unused' : ''}`}
+                        toks={[msym(s, j), mtxt(' ≤ '), ...mlin([relax.upper.slope], relax.upper.bias, () => msym(trace.stages[s.index - 1], j))]} />}
+                      {shown !== 'none' && <Eq x={mid} y={y0 + 24} anchor="middle" maxW={eqW} className={`lo ${lineUsed(s.index, j, 'lower') ? 'used' : focus ? 'unused' : ''}`}
+                        toks={[msym(s, j), mtxt(' ≥ '), ...mlin([relax.lower.slope], relax.lower.bias, () => msym(trace.stages[s.index - 1], j))]} />}
                     </g>
                   )}
                 </g>
@@ -772,9 +774,14 @@ export function NetworkDiagram({
               : prompt.slot === 'upper' ? p.y + CELL_H + EQ_LINE2 + 4
               : prompt.slot === 'def' ? p.y + CELL_H + 15
               : eqOn ? p.y + CELL_H + EQ_LINE2 + 21 : p.y + CELL_H + DEF_H + 20
+            // a ReLU's line: on its arrow, above it (upper) or below it (lower)
+            const onArrow = prompt.slot === 'line-upper' || prompt.slot === 'line-lower'
+            const zx = layout.pos[prompt.stage - 1]?.[prompt.neuron ?? 0]?.x ?? p.x
+            const ax = (zx + CELL_W + p.x) / 2
+            const ay = p.y + CELL_H / 2 + (prompt.slot === 'line-upper' ? -23 : 23)
             return (
               <PromptBox key={`${prompt.stage}-${prompt.neuron}-${prompt.slot}-${JSON.stringify(prompt.text)}`}
-                prompt={prompt} x={p.x + CELL_W / 2} y={y} onClick={onPrompt} />
+                prompt={prompt} x={onArrow ? ax : p.x + CELL_W / 2} y={onArrow ? ay : y} onClick={onPrompt} />
             )
           })()}
         </svg>

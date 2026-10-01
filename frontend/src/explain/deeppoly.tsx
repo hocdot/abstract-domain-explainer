@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { fmt, texLayer, texLin, texNum, texSym, textSym } from '../format'
 import { IntervalBar, ReluPlot, niceRange } from '../components/plots'
 import { Tex, hi, lo } from '../components/Tex'
-import type { Bounds, DiagramFocus, DiagramPrompt, Line, Side, Stage, Step, Trace } from '../types'
+import type { Bounds, DiagramFocus, DiagramPrompt, DiagramReveal, Line, Side, Stage, Step, Trace } from '../types'
 import { pneuron, pw, type StepProps, type StepView } from './registry'
 
 type Status = 'active' | 'inactive' | 'unstable'
@@ -334,6 +334,12 @@ function AffineBody({ step, trace, sub, onSub }: StepProps) {
   )
 }
 
+/** Which of a ReLU's lines its walks have reached at sub-step `sub`. */
+function reluLines(d: { lower: Derivation; upper: Derivation }, sub: number): 'none' | 'lower' | 'both' {
+  const n = d.lower.steps.length
+  return sub >= n + 1 ? 'both' : sub >= 1 ? 'lower' : 'none'
+}
+
 function ReluBody({ step, trace, sub, onSub }: StepProps) {
   const d = step.detail as unknown as ReluDetail
   const j = step.neuron!
@@ -344,64 +350,82 @@ function ReluBody({ step, trace, sub, onSub }: StepProps) {
   const l = d.pre.lower
   const u = d.pre.upper
   const { n, end, side, local, done, phase } = walkPhase(d, sub)
+  const at = onSub
+  // each line is found by the first substitution of its walk (this neuron by its own line)
+  const lines = reluLines(d, sub)
 
   return (
     <>
       <p>
-        Next, the activation: <Tex>{`${h} = \\max(0,\\ ${z})`}</Tex>. DeepPoly replaces it with two lines, one below and
-        one above, that hold for every <Tex>{z}</Tex> in <Tex>{`[${fmt(l)},\\ ${fmt(u)}]`}</Tex>. From now on they are
+        Next, the activation: <Tex>{`${h} = \\max(0,\\ ${z})`}</Tex>. DeepPoly replaces it with two lines, one above and
+        one below, that hold for every <Tex>{z}</Tex> in <Tex>{`[${fmt(l)},\\ ${fmt(u)}]`}</Tex>. From now on they are
         printed on the arrow into this neuron in the diagram (upper line above it, lower line below).
       </p>
       <div className={`status status-${d.status}`}>
         {d.status === 'active' ? 'Always active' : d.status === 'inactive' ? 'Always inactive' : 'Unstable'}
       </div>
 
-      {d.status === 'active' && (
-        <p>The interval is at or above 0, so ReLU is the identity here. Both lines are exact: <Tex>{`${h} = ${z}`}</Tex>.</p>
-      )}
-      {d.status === 'inactive' && (
-        <p>The interval is at or below 0, so the neuron is always off. Both lines are exact: <Tex>{`${h} = 0`}</Tex>.</p>
-      )}
-      {d.status === 'unstable' && (
+      {lines !== 'none' && (
         <>
-          <p>
-            <span className="hi">Upper line:</span> the chord from <Tex>{`(${fmt(l)}, 0)`}</Tex> to{' '}
-            <Tex>{`(${fmt(u)}, ${fmt(u)})`}</Tex>. It is the lowest line that stays above ReLU on the whole interval.
-          </p>
-          <Tex block>{`${h} \\le \\frac{u}{u - l}\\,(${z} - l) = ${hi(lineTex(d.relax.upper, z))}`}</Tex>
-          <p>
-            <span className="lo">Lower line:</span> any <Tex>{`${h} \\ge \\lambda\\, ${z}`}</Tex> with{' '}
-            <Tex>{'0 \\le \\lambda \\le 1'}</Tex> stays below ReLU on the interval, so any of them is valid. DeepPoly
-            tries the two extremes, <Tex>{'\\lambda = 0'}</Tex> and <Tex>{'\\lambda = 1'}</Tex>, and keeps the one whose
-            shaded region (the gap between the two lines, i.e. how much it over-approximates ReLU) is smaller.
-            Both regions are triangles:
-          </p>
-          <LambdaCompare pre={d.pre} upper={d.relax.upper} picked={d.relax.lower.slope} h={h} z={z} />
-          <p>
-            Both areas share the factor <Tex>{'\\tfrac12 (u - l)'}</Tex>, so the choice only compares{' '}
-            <Tex>{'u'}</Tex> with <Tex>{'-l'}</Tex>: here <Tex>{`u = ${texNum(u)} ${u > -l ? '>' : '\\le'} -l = ${texNum(-l)}`}</Tex>,
-            so <Tex>{`\\lambda = ${fmt(d.relax.lower.slope)}`}</Tex>{u === -l ? ' (a tie: either works, DeepPoly takes 0)' : ''}:
-          </p>
-          <Tex block>{`${h} \\ge ${lo(lineTex(d.relax.lower, z))}`}</Tex>
+          <h3 className="lo">Lower line</h3>
+          {d.status === 'active' && (
+            <p>The interval is at or above 0, so ReLU is the identity here and the line is exact: <Tex>{`${h} \\ge ${lo(z)}`}</Tex>.</p>
+          )}
+          {d.status === 'inactive' && (
+            <p>The interval is at or below 0, so the neuron is always off and the line is exact: <Tex>{`${h} \\ge ${lo('0')}`}</Tex>.</p>
+          )}
+          {d.status === 'unstable' && (
+            <>
+              <p>
+                Any <Tex>{`${h} \\ge \\lambda\\, ${z}`}</Tex> with <Tex>{'0 \\le \\lambda \\le 1'}</Tex> stays below
+                ReLU on the interval, so any of them is valid. DeepPoly tries the two extremes,{' '}
+                <Tex>{'\\lambda = 0'}</Tex> and <Tex>{'\\lambda = 1'}</Tex>, and keeps the one whose shaded region (the
+                gap between the two lines, i.e. how much it over-approximates ReLU) is smaller. Both regions are triangles:
+              </p>
+              <LambdaCompare pre={d.pre} upper={d.relax.upper} picked={d.relax.lower.slope} h={h} z={z} />
+              <p>
+                Both areas share the factor <Tex>{'\\tfrac12 (u - l)'}</Tex>, so the choice only compares{' '}
+                <Tex>{'u'}</Tex> with <Tex>{'-l'}</Tex>: here <Tex>{`u = ${texNum(u)} ${u > -l ? '>' : '\\le'} -l = ${texNum(-l)}`}</Tex>,
+                so <Tex>{`\\lambda = ${fmt(d.relax.lower.slope)}`}</Tex>{u === -l ? ' (a tie: either works, DeepPoly takes 0)' : ''}:
+              </p>
+              <Tex block>{`${h} \\ge ${lo(lineTex(d.relax.lower, z))}`}</Tex>
+            </>
+          )}
         </>
       )}
 
-      <ReluPlot pre={d.pre} relax={d.relax} />
+      {lines === 'both' && (
+        <>
+          <h3 className="hi">Upper line</h3>
+          {d.status === 'unstable' ? (
+            <>
+              <p>
+                The chord from <Tex>{`(${fmt(l)}, 0)`}</Tex> to <Tex>{`(${fmt(u)}, ${fmt(u)})`}</Tex>. It is the lowest
+                line that stays above ReLU on the whole interval.
+              </p>
+              <Tex block>{`${h} \\le \\frac{u}{u - l}\\,(${z} - l) = ${hi(lineTex(d.relax.upper, z))}`}</Tex>
+            </>
+          ) : (
+            <p>Exact as well: <Tex>{`${h} \\le ${hi(d.status === 'active' ? z : '0')}`}</Tex>.</p>
+          )}
+          <ReluPlot pre={d.pre} relax={d.relax} />
+        </>
+      )}
 
       <div className="section-head">
         <h3>Bounds of <Tex>{h}</Tex> over the inputs</h3>
-        <SideToggle side={side} onSide={(s) => onSub(s === 'lower' ? 0 : n)} />
+        <SideToggle side={side} onSide={(s) => at(s === 'lower' ? 0 : n)} />
       </div>
       <p className="hint muted">
         Press <em>Continue</em> (or <kbd>→</kbd>) to substitute one layer at a time: first the lower bound, then the
-        upper bound, then both together, then concretize. Or click any step below.
+        upper bound, then both together. Or click any step below.
       </p>
-      {side === 'upper' && <PrevBound d={d.lower} stage={stage} j={j} trace={trace} onSelect={() => onSub(0)} />}
+      {side === 'upper' && <PrevBound d={d.lower} stage={stage} j={j} trace={trace} onSelect={() => at(0)} />}
       <Backsub d={d[side]} side={side} stage={stage} j={j} trace={trace} sub={done ? d[side].steps.length : local}
-        onSub={(k) => onSub(side === 'lower' ? k : n + k)} />
+        onSub={(k) => at(side === 'lower' ? k : n + k)} />
 
       <Finish lower={d.lower} upper={d.upper} stage={stage} j={j} trace={trace}
-        phase={phase} onSelect={(k) => onSub(end + k)} concretize={false}>
+        phase={phase} onSelect={(k) => at(end + k)} concretize={false}>
         <p className="small muted">
           No need to concretize <Tex>{h}</Tex>: DeepPoly never uses its interval. Stability was decided by{' '}
           <Tex>{z}</Tex>'s interval, and later layers substitute through <Tex>{h}</Tex> with its two lines, not with
@@ -458,6 +482,10 @@ function walkPrompt(step: Step, trace: Trace, sub: number): DiagramPrompt {
   // e.g. "Substitute h₁, h₂ in terms of z₁, z₂". Each ReLU output has lines in its
   // own input only; a weighted sum is over the neurons its result uses (all of the layer
   // when that is only a constant)
+  // a ReLU's walk first substitutes the neuron by its own line: ask for that line, on its arrow
+  if (st.op === 'relax' && st.replaced === step.stage) {
+    return at(side === 'lower' ? 'line-lower' : 'line-upper', [pw(`${side === 'lower' ? 'Lower' : 'Upper'} line of `), name, pw('?')])
+  }
   const layer = trace.stages[st.replaced]
   const below = trace.stages[st.stage]
   const list = (stage: Stage, js: number[]) => js.flatMap((j, k) => [...(k ? [pw(', ')] : []), pneuron(stage, j)])
@@ -478,6 +506,11 @@ const walkLength = (step: Step) => {
 }
 // a ReLU output stops at "both bounds": no concretize step
 const reluWalkLength = (step: Step) => walkLength(step) - 1
+// its lines appear on the arrow as the walks reach them
+const reluReveal = (step: Step, _trace: Trace, sub: number): DiagramReveal => ({
+  stage: step.stage, neuron: step.neuron!, bounds: 'both',
+  lines: reluLines(step.detail as unknown as ReluDetail, sub),
+})
 
 export const deeppolyViews: Record<string, StepView> = {
   'deeppoly.affine': {
@@ -492,6 +525,7 @@ export const deeppolyViews: Record<string, StepView> = {
     subSteps: reluWalkLength,
     focus: walkFocus,
     prompt: walkPrompt,
+    reveal: reluReveal,
     title: (step, trace) => `Relaxing ${textSym(trace.stages[step.stage], step.neuron!)}: two lines for ReLU`,
     heading: (step, trace) => <>Relaxing <Tex>{texSym(trace.stages[step.stage], step.neuron!)}</Tex>: two lines for ReLU</>,
     Body: ReluBody,
